@@ -485,3 +485,47 @@ Strictly authorized controlled live publishing tests executed to `@kampunginggri
 - **When is App Review / Advanced Access Required?**: Meta documentation dictates that Advanced Access and App Review are strictly required only when an application accesses data or publishes content on behalf of **external, non-developer third-party users**. Since `@kampunginggrisfess` is owned by the developer account, public web users do not interact with Meta OAuth.
 - **Business Verification**: Required by Meta if the app is converted to Live Mode for third parties, but not required to maintain internal automation on owner-owned profiles.
 - **Phase 08 Preparedness**: Distributed token refresh locking and background worker coordination are documented as Phase 08 prerequisites. Automatic scheduler remains disabled.
+
+---
+
+## Phase 08: Automated Publishing, Scheduler & Background Workers (Complete & Verified)
+
+### 1. Architectural Summary
+Built a robust, serverless-friendly automated background publishing and scheduling pipeline designed to operate reliably 24/7 without needing the administrator's computer to be online:
+1. **Durable Database Queue & Atomic Claims**:
+   - `queue_jobs` table with `claim_version`, `lease_owner`, `lease_expires_at`, and `priority` fields.
+   - Atomic database function `claim_next_queue_job_atomic` implementing `SELECT ... FOR UPDATE SKIP LOCKED` semantics.
+2. **Atomic Publication Slot Reservation**:
+   - `publication_slots` table enforcing strict uniqueness on `(wib_date, slot_time)` and `(submission_id)`.
+   - Max 2 publications per WIB calendar day (strictly 12:00 and 19:00 WIB Asia/Jakarta).
+   - Atomic stored procedure `reserve_publication_slot_atomic` preventing concurrent double-booking of any slot.
+3. **Distributed Mutual Exclusion**:
+   - `distributed_locks` table and `acquire_distributed_lock_atomic` / `release_distributed_lock_atomic` RPC functions replacing in-memory Node.js mutexes across serverless workers.
+   - Fencing tokens ensure stale workers cannot commit updates after lease expiration.
+4. **Secure Cron Worker Endpoint (`/api/cron/worker`)**:
+   - Protected by high-entropy server-only `CRON_SECRET` using timing-safe constant-time comparison (`crypto.timingSafeEqual`).
+   - Rejects secrets passed in query strings; accepts only `Authorization: Bearer <CRON_SECRET>` headers.
+   - Supports safe read-only diagnostics (`GET /api/cron/worker`) and dry-run execution.
+5. **Scheduler & Catch-Up Window**:
+   - 30-minute catch-up window after 12:00 and 19:00 WIB slots. Missed slots roll over cleanly to the next eligible publication window.
+   - Submissions with prefix `TEST*` are strictly excluded from automated queue selection.
+6. **Token & Storage Automated Maintenance**:
+   - Daily Threads token health verification with distributed-safe auto-refresh (triggered when <= 30 days remaining).
+   - Daily storage reconciliation and FIFO cleanup down to 85% when storage reaches 90% warning or 95% hard limit.
+7. **Admin Automation Controls & Dashboard**:
+   - Real-time Automation Settings section in Admin Dashboard (`/admin/settings`).
+   - Master Automation Switch (defaults to OFF, fail-closed safety gate).
+   - Moderation Mode selection (`manual`, `ai_assisted`, `smart_auto`).
+   - Interactive diagnostic triggers, token checks, storage maintenance, and moderation batch runner.
+8. **Threads Publishing Format Correction**:
+   - **Unified Formatter (`threads-formatter.ts`)**: Built a single, deterministic formatting engine used across manual publishing, automated background worker, and admin previews.
+   - **Automatic Label Stripping**: Strips `[Kampung Inggris Fess]`, `Slide 1:`, `Slide 2:`, slide numbers (`1/2`, `2/2`), and continuation labels (`(Cont.)`, `(bersambung)`, `(Lanjutan)`).
+   - **Single-Slide Directly Published**: Original approved message published directly as root post.
+   - **Two-Slide Submissions**: First message published as root post; second message published as direct threaded reply to root post without any slide numbering or continuation labels.
+   - **Preserves Original Content**: Retains original wording, punctuation, emojis, and paragraph breaks without silent truncation.
+   - **Clean Natural Text Default**: Defaults to clean text without branding prefixes, hashtags, reference codes, or promotional CTAs (`threads_show_ref_code` defaults to `false`).
+   - **Preserves Administrator Captions**: Respects administrator-configured prefix, suffix, and tracking codes if explicitly enabled.
+   - **Admin Preview Parity**: Admin preview UI (`queue-client.tsx`, `social-integrations-client.tsx`) and dry run reports guarantee 100% byte-for-byte fidelity with actual Threads payloads.
+   - **Instagram Untouched**: Instagram templates, carousels, stories, and captions remain completely unmodified.
+   - **No Live Posts Created**: Verified through deterministic dry runs and automated unit validation without creating live posts.
+

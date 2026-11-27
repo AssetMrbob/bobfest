@@ -263,6 +263,10 @@ export interface Database {
           storage_cleanup_target_percent: number;
           moderation_mode?: string;
           daily_ai_request_budget?: number;
+          master_automation_enabled?: boolean;
+          catchup_window_minutes?: number;
+          max_retry_attempts?: number;
+          storage_cleanup_retention_days?: number;
           instagram_feed_enabled?: boolean;
           instagram_story_enabled?: boolean;
           threads_enabled?: boolean;
@@ -289,6 +293,10 @@ export interface Database {
           storage_cleanup_target_percent?: number;
           moderation_mode?: string;
           daily_ai_request_budget?: number;
+          master_automation_enabled?: boolean;
+          catchup_window_minutes?: number;
+          max_retry_attempts?: number;
+          storage_cleanup_retention_days?: number;
           instagram_feed_enabled?: boolean;
           instagram_story_enabled?: boolean;
           threads_enabled?: boolean;
@@ -315,6 +323,10 @@ export interface Database {
           storage_cleanup_target_percent?: number;
           moderation_mode?: string;
           daily_ai_request_budget?: number;
+          master_automation_enabled?: boolean;
+          catchup_window_minutes?: number;
+          max_retry_attempts?: number;
+          storage_cleanup_retention_days?: number;
           instagram_feed_enabled?: boolean;
           instagram_story_enabled?: boolean;
           threads_enabled?: boolean;
@@ -399,6 +411,9 @@ export interface Database {
           sanitized_error_code: string | null;
           sanitized_error_message: string | null;
           payload_snapshot: Json | null;
+          lease_owner?: string | null;
+          lease_expires_at?: string | null;
+          claim_version?: number;
           created_at: string;
           updated_at: string;
         };
@@ -420,6 +435,9 @@ export interface Database {
           sanitized_error_code?: string | null;
           sanitized_error_message?: string | null;
           payload_snapshot?: Json | null;
+          lease_owner?: string | null;
+          lease_expires_at?: string | null;
+          claim_version?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -441,6 +459,9 @@ export interface Database {
           sanitized_error_code?: string | null;
           sanitized_error_message?: string | null;
           payload_snapshot?: Json | null;
+          lease_owner?: string | null;
+          lease_expires_at?: string | null;
+          claim_version?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -496,6 +517,174 @@ export interface Database {
           last_status?: string;
           sanitized_last_error?: string | null;
           metadata?: Json;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      queue_jobs: {
+        Row: {
+          id: string;
+          job_type: string;
+          batch_id: string | null;
+          submission_id: string | null;
+          status: string;
+          priority: number;
+          scheduled_at: string;
+          next_attempt_at: string;
+          attempt_count: number;
+          max_attempts: number;
+          lease_owner: string | null;
+          lease_expires_at: string | null;
+          claim_version: number;
+          heartbeat_at: string | null;
+          last_error_code: string | null;
+          sanitized_error_message: string | null;
+          payload: Json;
+          created_at: string;
+          completed_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_type: string;
+          batch_id?: string | null;
+          submission_id?: string | null;
+          status?: string;
+          priority?: number;
+          scheduled_at?: string;
+          next_attempt_at?: string;
+          attempt_count?: number;
+          max_attempts?: number;
+          lease_owner?: string | null;
+          lease_expires_at?: string | null;
+          claim_version?: number;
+          heartbeat_at?: string | null;
+          last_error_code?: string | null;
+          sanitized_error_message?: string | null;
+          payload?: Json;
+          created_at?: string;
+          completed_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          job_type?: string;
+          batch_id?: string | null;
+          submission_id?: string | null;
+          status?: string;
+          priority?: number;
+          scheduled_at?: string;
+          next_attempt_at?: string;
+          attempt_count?: number;
+          max_attempts?: number;
+          lease_owner?: string | null;
+          lease_expires_at?: string | null;
+          claim_version?: number;
+          heartbeat_at?: string | null;
+          last_error_code?: string | null;
+          sanitized_error_message?: string | null;
+          payload?: Json;
+          created_at?: string;
+          completed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      publication_slots: {
+        Row: {
+          id: string;
+          wib_date: string;
+          slot_time: string;
+          batch_id: string;
+          submission_id: string;
+          reserved_at: string;
+          status: string;
+        };
+        Insert: {
+          id?: string;
+          wib_date: string;
+          slot_time: string;
+          batch_id: string;
+          submission_id: string;
+          reserved_at?: string;
+          status?: string;
+        };
+        Update: {
+          id?: string;
+          wib_date?: string;
+          slot_time?: string;
+          batch_id?: string;
+          submission_id?: string;
+          reserved_at?: string;
+          status?: string;
+        };
+        Relationships: [];
+      };
+      distributed_locks: {
+        Row: {
+          lock_key: string;
+          owner_id: string;
+          fencing_token: number;
+          acquired_at: string;
+          expires_at: string;
+          metadata: Json;
+        };
+        Insert: {
+          lock_key: string;
+          owner_id: string;
+          fencing_token?: number;
+          acquired_at?: string;
+          expires_at: string;
+          metadata?: Json;
+        };
+        Update: {
+          lock_key?: string;
+          owner_id?: string;
+          fencing_token?: number;
+          acquired_at?: string;
+          expires_at?: string;
+          metadata?: Json;
+        };
+        Relationships: [];
+      };
+      scheduler_health: {
+        Row: {
+          id: string;
+          last_worker_run_at: string | null;
+          last_successful_run_at: string | null;
+          last_worker_duration_ms: number | null;
+          last_worker_status: string;
+          last_worker_report: Json;
+          last_token_check_at: string | null;
+          last_token_refresh_at: string | null;
+          last_storage_cleanup_at: string | null;
+          consecutive_failures: number;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          last_worker_run_at?: string | null;
+          last_successful_run_at?: string | null;
+          last_worker_duration_ms?: number | null;
+          last_worker_status?: string;
+          last_worker_report?: Json;
+          last_token_check_at?: string | null;
+          last_token_refresh_at?: string | null;
+          last_storage_cleanup_at?: string | null;
+          consecutive_failures?: number;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          last_worker_run_at?: string | null;
+          last_successful_run_at?: string | null;
+          last_worker_duration_ms?: number | null;
+          last_worker_status?: string;
+          last_worker_report?: Json;
+          last_token_check_at?: string | null;
+          last_token_refresh_at?: string | null;
+          last_storage_cleanup_at?: string | null;
+          consecutive_failures?: number;
           updated_at?: string;
         };
         Relationships: [];
@@ -804,6 +993,60 @@ export interface Database {
           reconciled_stored: number;
           active_reserved: number;
           last_reconciled: string;
+        }[];
+      };
+      reserve_publication_slot_atomic: {
+        Args: {
+          p_wib_date: string;
+          p_slot_time: string;
+          p_batch_id: string;
+          p_submission_id: string;
+        };
+        Returns: {
+          success: boolean;
+          error?: string;
+          wib_date?: string;
+          slot_time?: string;
+          batch_id?: string;
+        };
+      };
+      acquire_distributed_lock_atomic: {
+        Args: {
+          p_lock_key: string;
+          p_owner_id: string;
+          p_ttl_seconds: number;
+          p_metadata?: Json;
+        };
+        Returns: {
+          acquired: boolean;
+          lock_key?: string;
+          owner_id?: string;
+          fencing_token?: number;
+          expires_at?: string;
+        };
+      };
+      release_distributed_lock_atomic: {
+        Args: {
+          p_lock_key: string;
+          p_owner_id: string;
+          p_fencing_token: number;
+        };
+        Returns: boolean;
+      };
+      claim_next_queue_job_atomic: {
+        Args: {
+          p_worker_id: string;
+          p_lease_duration_seconds?: number;
+        };
+        Returns: {
+          job_id: string;
+          job_type: string;
+          batch_id: string | null;
+          submission_id: string | null;
+          attempt_count: number;
+          max_attempts: number;
+          claim_version: number;
+          payload: Json;
         }[];
       };
     };

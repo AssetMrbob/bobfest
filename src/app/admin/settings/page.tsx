@@ -1,10 +1,12 @@
 import { getAppSettings, saveAppSettings, getSystemLogs, getAiQuotaStatus } from "@/app/admin/actions";
+import { getAutomationStatusAction } from "@/app/admin/automation-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Save, ShieldCheck, HardDrive, AlertCircle, Sparkles, Share2 } from "lucide-react";
 import { InstagramIcon } from "@/components/ui/icons";
 import { SystemLogsClient } from "@/components/admin/system-logs-client";
 import { SocialIntegrationsClient } from "@/components/admin/social-integrations-client";
+import { AutomationControlsClient } from "@/components/admin/automation-controls-client";
 import { Suspense } from "react";
 import { isGeminiConfigured, getGeminiModelName } from "@/lib/gemini/moderation-service";
 
@@ -12,6 +14,7 @@ async function SettingsContent() {
   const settings = await getAppSettings();
   const logsData = await getSystemLogs("all", 50);
   const aiQuota = await getAiQuotaStatus();
+  const automationData = await getAutomationStatusAction();
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -40,6 +43,9 @@ async function SettingsContent() {
           </p>
         </div>
       )}
+
+      {/* Phase 08: Automation Controls & Health Component */}
+      <AutomationControlsClient initialData={automationData} />
 
       <form
         action={async (formData: FormData) => {

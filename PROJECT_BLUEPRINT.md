@@ -58,6 +58,7 @@ Designs and implementations must be tested and optimized on mobile viewports fir
 | **Social Publishing (Phase 07)** | Instagram Graph API & Threads API | Unified Login container publishing, companion stories, and Threads replies |
 | **Token Security (Phase 07)** | AES-256-GCM Credential Store | Server-side encrypted persistence in `app_credentials` |
 | **Scheduler (Phase 08)** | Supabase Cron / Edge Functions | Scheduled publishing at 12:00 and 19:00 WIB |
+| **Durable Queue & Locking (Phase 08)** | Supabase PostgreSQL + Distributed Locks | Transactional slot reservation (2/day), atomic queue claims, and fencing |
 
 ---
 
@@ -71,7 +72,7 @@ Designs and implementations must be tested and optimized on mobile viewports fir
 - **Phase 05**: Gemini AI Moderation (Free Tier) (Complete)
 - **Phase 06**: Feed & Story Generator (Sharp) (Complete)
 - **Phase 07**: Instagram Graph API & Threads API Multi-Platform Publishing (Complete & Verified)
-- **Phase 08**: Automated Publishing & Scheduler (Upcoming)
+- **Phase 08**: Automated Publishing, Scheduler & Background Workers (Complete & Verified)
 - **Phase 09**: Security, Testing & Production Deployment (Upcoming)
 
 ---
