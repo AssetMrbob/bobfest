@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Search, Filter, Check, X, Clock, AlertTriangle, Eye, HelpCircle } from "lucide-react";
-import { moderateSubmission } from "@/app/admin/actions";
+import { moderateSubmission, getAdminMediaSignedUrl } from "@/app/admin/actions";
 
 interface AdminSubmissionItem {
   id: string;
@@ -17,6 +17,13 @@ interface AdminSubmissionItem {
   status: SubmissionStatus;
   createdAt: string;
   moderationNotes?: string;
+  mediaAsset?: {
+    id: string;
+    storagePath: string;
+    mimeType: string;
+    sizeBytes: number;
+    status: string;
+  };
 }
 
 interface InboxClientProps {
@@ -32,6 +39,32 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
   const [moderationReason, setModerationReason] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [confirmRejectId, setConfirmRejectId] = React.useState<string | null>(null);
+  const [activeMediaSignedUrl, setActiveMediaSignedUrl] = React.useState<string | null>(null);
+  const [loadingMedia, setLoadingMedia] = React.useState(false);
+
+  // Trigger signed preview fetch when an item is selected
+  const handleSelectSubmission = (item: AdminSubmissionItem) => {
+    setSelectedSubmission(item);
+    if (item.mediaAsset?.storagePath) {
+      setLoadingMedia(true);
+      setActiveMediaSignedUrl(null);
+      getAdminMediaSignedUrl(item.mediaAsset.storagePath).then((res) => {
+        if (res.signedUrl) {
+          setActiveMediaSignedUrl(res.signedUrl);
+        }
+        setLoadingMedia(false);
+      });
+    } else {
+      setActiveMediaSignedUrl(null);
+      setLoadingMedia(false);
+    }
+  };
+
+  const handleCloseDetailModal = () => {
+    setSelectedSubmission(null);
+    setActiveMediaSignedUrl(null);
+    setLoadingMedia(false);
+  };
 
   // Filter logic
   const filteredSubmissions = submissions.filter((item) => {
@@ -214,7 +247,7 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
                 {/* Mobile Moderation Action Bar (Minimal taps, 44×44px touch targets) */}
                 <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between gap-1">
                   <button
-                    onClick={() => setSelectedSubmission(sub)}
+                    onClick={() => handleSelectSubmission(sub)}
                     className="min-h-[44px] px-3 inline-flex items-center gap-1.5 text-xs text-[#737373] hover:text-[#171717] rounded-lg transition-colors cursor-pointer"
                   >
                     <Eye className="w-4 h-4" />
@@ -299,7 +332,7 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
                       <td className="py-3 px-4 text-right">
                         <div className="inline-flex items-center gap-1">
                           <button
-                            onClick={() => setSelectedSubmission(sub)}
+                            onClick={() => handleSelectSubmission(sub)}
                             className="p-1.5 text-[#737373] hover:text-[#171717] hover:bg-[#E5E7EB] rounded cursor-pointer"
                             title="View Details"
                           >
@@ -395,7 +428,7 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
       {selectedSubmission && (
         <Modal
           isOpen={true}
-          onClose={() => setSelectedSubmission(null)}
+          onClose={handleCloseDetailModal}
           title={`Submission ${selectedSubmission.id}`}
           description={`Created at ${formatDateTime(selectedSubmission.createdAt)}`}
         >
@@ -415,6 +448,40 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
                 {selectedSubmission.message}
               </p>
             </div>
+
+            {/* Media Attachment Preview */}
+            {selectedSubmission.mediaAsset && (
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[#737373] block">Attached Media:</span>
+                <div className="p-3 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg">
+                  {loadingMedia && (
+                    <p className="text-xs text-[#737373]">Loading secure preview...</p>
+                  )}
+                  {activeMediaSignedUrl && selectedSubmission.mediaAsset.mimeType.startsWith("image/") && (
+                    <div className="rounded overflow-hidden max-h-72 flex items-center justify-center bg-black/5">
+                      <img
+                        src={activeMediaSignedUrl}
+                        alt="Submitted media preview"
+                        className="max-h-72 object-contain"
+                      />
+                    </div>
+                  )}
+                  {activeMediaSignedUrl && selectedSubmission.mediaAsset.mimeType.startsWith("video/") && (
+                    <video
+                      src={activeMediaSignedUrl}
+                      controls
+                      className="w-full max-h-72 rounded bg-black"
+                    />
+                  )}
+                  {!loadingMedia && !activeMediaSignedUrl && (
+                    <p className="text-xs text-[#991B1B]">Media is deleted or preview unavailable.</p>
+                  )}
+                  <p className="text-[10px] text-[#737373] mt-2">
+                    {selectedSubmission.mediaAsset.mimeType} • {(selectedSubmission.mediaAsset.sizeBytes / 1024).toFixed(0)} KB
+                  </p>
+                </div>
+              </div>
+            )}
 
             {selectedSubmission.moderationNotes && (
               <div className="p-3 bg-[#FEFCE8] border border-[#FEF08A] rounded-lg text-[#854D0E] flex items-start gap-2">

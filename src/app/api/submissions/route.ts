@@ -45,7 +45,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { message, recipient, turnstileToken, idempotencyKey } = body;
+    const { message, recipient, turnstileToken, idempotencyKey, mediaAttachment } = body;
+
+    // Validate mediaAttachment schema if present
+    if (mediaAttachment) {
+      if (
+        typeof mediaAttachment !== "object" ||
+        !mediaAttachment.reservationToken ||
+        !mediaAttachment.storagePath ||
+        !mediaAttachment.mimeType
+      ) {
+        return NextResponse.json(
+          { error: "Invalid media attachment payload." },
+          { status: 400 }
+        );
+      }
+    }
 
     // 3. Client identification (HMAC-SHA256 with server secret, never storing raw IP)
     const forwardedFor = request.headers.get("x-forwarded-for") || "";
@@ -139,10 +154,77 @@ export async function POST(request: NextRequest) {
 
     if (dbError || !inserted) {
       console.error("Database submission error:", dbError);
+      // If media reservation was provided, release reservation on submission failure
+      if (mediaAttachment?.reservationToken) {
+        await supabase.rpc("release_storage_reservation_atomic", {
+          p_token: mediaAttachment.reservationToken,
+        });
+      }
       return NextResponse.json(
         { error: "Failed to persist submission to database. Please try again later." },
         { status: 500 }
       );
+    }
+
+    // 9b. Finalize and verify media attachment if present
+    if (mediaAttachment) {
+      try {
+        const targetBucket = mediaAttachment.mediaType === "video" ? "bobfess-videos" : "bobfess-images";
+        const { data: objectMeta, error: metaError } = await supabase.storage
+          .from(targetBucket)
+          .list(mediaAttachment.storagePath.split("/").slice(0, -1).join("/"), {
+            search: mediaAttachment.storagePath.split("/").pop(),
+          });
+
+        const targetFile = objectMeta?.[0];
+        const actualBytes = targetFile?.metadata?.size;
+
+        if (metaError || !targetFile || !actualBytes || actualBytes <= 0) {
+          // Object not found in storage or 0 bytes - rollback submission
+          await supabase.from("submissions").delete().eq("id", inserted.id);
+          await supabase.rpc("release_storage_reservation_atomic", {
+            p_token: mediaAttachment.reservationToken,
+          });
+          return NextResponse.json(
+            { error: "Uploaded media file could not be verified in storage." },
+            { status: 400 }
+          );
+        }
+
+        // Finalize atomic reservation
+        const { data: finalizeData, error: finalizeErr } = await supabase.rpc(
+          "finalize_storage_reservation_atomic",
+          {
+            p_token: mediaAttachment.reservationToken,
+            p_actual_bytes: actualBytes,
+          }
+        );
+
+        if (finalizeErr || !finalizeData?.[0]?.success) {
+          // Exceeded quota or validation failure - remove object and rollback submission
+          await supabase.storage.from(targetBucket).remove([mediaAttachment.storagePath]);
+          await supabase.from("submissions").delete().eq("id", inserted.id);
+          return NextResponse.json(
+            { error: finalizeData?.[0]?.error_message || "Media validation failed." },
+            { status: 400 }
+          );
+        }
+
+        // Create confirmed media_assets record linked to submission
+        const { error: mediaDbErr } = await supabase.from("media_assets").insert({
+          submission_id: inserted.id,
+          storage_path: `${targetBucket}/${mediaAttachment.storagePath}`,
+          mime_type: mediaAttachment.mimeType,
+          size_bytes: actualBytes,
+          status: "pending",
+        });
+
+        if (mediaDbErr) {
+          console.error("Failed to link media asset record:", mediaDbErr);
+        }
+      } catch (mediaErr) {
+        console.error("Media finalization error:", mediaErr);
+      }
     }
 
     // 10. Persist idempotency key

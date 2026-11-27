@@ -1,13 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { AlertCircle, CheckCircle2, Lock } from "lucide-react";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { BUSINESS_RULES } from "@/lib/constants";
 import { FormSubmissionState, FormErrors } from "@/lib/types/submission";
 import { TurnstileWidget } from "@/components/public/turnstile-widget";
+import { MediaAttachment, UploadedMediaData } from "@/components/public/media-attachment";
 
 export function SubmissionForm() {
   const [recipient, setRecipient] = React.useState("");
@@ -16,6 +17,9 @@ export function SubmissionForm() {
   const [formState, setFormState] = React.useState<FormSubmissionState>("idle");
   const [errors, setErrors] = React.useState<FormErrors>({});
   const [publicCode, setPublicCode] = React.useState<string | null>(null);
+  const [mediaAttachment, setMediaAttachment] = React.useState<UploadedMediaData | null>(null);
+  const [isMediaUploading, setIsMediaUploading] = React.useState(false);
+  const [hasMediaPermission, setHasMediaPermission] = React.useState(false);
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
@@ -29,6 +33,10 @@ export function SubmissionForm() {
 
     if (recipient.trim().length > 100) {
       newErrors.recipient = "Recipient cannot exceed 100 characters.";
+    }
+
+    if (mediaAttachment && !hasMediaPermission) {
+      newErrors.general = "You must confirm you have permission to share this media.";
     }
 
     setErrors(newErrors);
@@ -55,6 +63,7 @@ export function SubmissionForm() {
           recipient: recipient.trim() || undefined,
           message: message.trim(),
           turnstileToken: turnstileToken || undefined,
+          mediaAttachment: mediaAttachment || undefined,
         }),
       });
 
@@ -226,16 +235,27 @@ export function SubmissionForm() {
           )}
         </div>
 
-        {/* Media Notice (Phase 03 Placeholder) */}
-        <div className="p-3 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg flex items-center justify-between text-xs text-[#737373]">
-          <span className="flex items-center gap-1.5 text-xs">
-            <Lock className="w-3.5 h-3.5 text-[#A3A3A3]" />
-            Photo/video attachment in Phase 03
-          </span>
-          <span className="text-[10px] font-mono uppercase text-[#A3A3A3]">
-            Coming soon
-          </span>
-        </div>
+        {/* Functional Media Attachment Selector */}
+        <MediaAttachment
+          onMediaReady={(media) => setMediaAttachment(media)}
+          onUploadingChange={(uploading) => setIsMediaUploading(uploading)}
+          disabled={formState === "submitting"}
+        />
+
+        {/* Media rights checkbox when attachment is present */}
+        {mediaAttachment && (
+          <label className="flex items-start gap-2.5 cursor-pointer pt-1">
+            <input
+              type="checkbox"
+              checked={hasMediaPermission}
+              onChange={(e) => setHasMediaPermission(e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded border-[#D1D5DB] text-[#2563EB] focus:ring-[#2563EB]"
+            />
+            <span className="text-[11px] text-[#737373] leading-relaxed">
+              I confirm I hold the rights or have permission to share this media, and it complies with community guidelines.
+            </span>
+          </label>
+        )}
 
         {/* Cloudflare Turnstile Bot Defense Widget */}
         <TurnstileWidget
@@ -249,8 +269,8 @@ export function SubmissionForm() {
             type="submit"
             variant="primary"
             size="lg"
-            isLoading={formState === "submitting"}
-            disabled={formState === "submitting" || isOverLimit}
+            isLoading={formState === "submitting" || isMediaUploading}
+            disabled={formState === "submitting" || isMediaUploading || isOverLimit}
             className="w-full text-base font-medium h-12"
           >
             Send anonymously

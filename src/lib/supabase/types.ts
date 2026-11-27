@@ -68,6 +68,7 @@ export interface Database {
           status: string;
           created_at: string;
           deleted_at: string | null;
+          deletion_reason?: string | null;
         };
         Insert: {
           id?: string;
@@ -78,6 +79,7 @@ export interface Database {
           status?: string;
           created_at?: string;
           deleted_at?: string | null;
+          deletion_reason?: string | null;
         };
         Update: {
           id?: string;
@@ -88,6 +90,7 @@ export interface Database {
           status?: string;
           created_at?: string;
           deleted_at?: string | null;
+          deletion_reason?: string | null;
         };
         Relationships: [
           {
@@ -347,6 +350,96 @@ export interface Database {
         };
         Relationships: [];
       };
+      storage_capacity_ledger: {
+        Row: {
+          id: string;
+          total_budget_bytes: number;
+          reconciled_stored_bytes: number;
+          active_reserved_bytes: number;
+          last_reconciled_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          total_budget_bytes?: number;
+          reconciled_stored_bytes?: number;
+          active_reserved_bytes?: number;
+          last_reconciled_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          total_budget_bytes?: number;
+          reconciled_stored_bytes?: number;
+          active_reserved_bytes?: number;
+          last_reconciled_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      storage_reservations: {
+        Row: {
+          id: string;
+          reservation_token: string;
+          storage_path: string;
+          media_type: "image" | "video";
+          mime_type: string;
+          size_bytes: number;
+          client_hash: string;
+          status: "reserved" | "finalized" | "expired" | "released";
+          created_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          id?: string;
+          reservation_token: string;
+          storage_path: string;
+          media_type: "image" | "video";
+          mime_type: string;
+          size_bytes: number;
+          client_hash: string;
+          status?: "reserved" | "finalized" | "expired" | "released";
+          created_at?: string;
+          expires_at: string;
+        };
+        Update: {
+          id?: string;
+          reservation_token?: string;
+          storage_path?: string;
+          media_type?: "image" | "video";
+          mime_type?: string;
+          size_bytes?: number;
+          client_hash?: string;
+          status?: "reserved" | "finalized" | "expired" | "released";
+          created_at?: string;
+          expires_at?: string;
+        };
+        Relationships: [];
+      };
+      storage_audit_logs: {
+        Row: {
+          id: string;
+          event_type: string;
+          bytes_change: number;
+          details: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_type: string;
+          bytes_change?: number;
+          details?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_type?: string;
+          bytes_change?: number;
+          details?: Json | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -367,6 +460,57 @@ export interface Database {
           current_count: number;
           remaining: number;
           reset_seconds: number;
+        }[];
+      };
+      reserve_storage_capacity_atomic: {
+        Args: {
+          p_token: string;
+          p_path: string;
+          p_media_type: string;
+          p_mime: string;
+          p_client_hash: string;
+          p_ttl_seconds?: number;
+        };
+        Returns: {
+          allowed: boolean;
+          reserved_size: number;
+          current_stored: number;
+          active_reserved: number;
+          hard_capacity: number;
+          available_bytes: number;
+          error_message: string | null;
+        }[];
+      };
+      finalize_storage_reservation_atomic: {
+        Args: {
+          p_token: string;
+          p_actual_bytes: number;
+        };
+        Returns: {
+          success: boolean;
+          reconciled_stored: number;
+          active_reserved: number;
+          error_message: string | null;
+        }[];
+      };
+      release_storage_reservation_atomic: {
+        Args: {
+          p_token: string;
+        };
+        Returns: {
+          success: boolean;
+          active_reserved: number;
+        }[];
+      };
+      reconcile_storage_ledger_atomic: {
+        Args: {
+          p_actual_stored_bytes: number;
+        };
+        Returns: {
+          success: boolean;
+          reconciled_stored: number;
+          active_reserved: number;
+          last_reconciled: string;
         }[];
       };
     };

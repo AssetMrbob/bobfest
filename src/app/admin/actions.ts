@@ -291,7 +291,7 @@ export async function getAdminSubmissions(params: {
     const supabase = createAdminSupabaseClient();
     let queryBuilder = supabase
       .from("submissions")
-      .select("*", { count: "exact" })
+      .select("*, media_assets(id, storage_path, mime_type, size_bytes, status)", { count: "exact" })
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -323,6 +323,15 @@ export async function getAdminSubmissions(params: {
         status: row.status,
         createdAt: row.created_at,
         moderationNotes: row.moderation_reason || undefined,
+        mediaAsset: (row.media_assets && row.media_assets.length > 0)
+          ? {
+              id: row.media_assets[0].id,
+              storagePath: row.media_assets[0].storage_path,
+              mimeType: row.media_assets[0].mime_type,
+              sizeBytes: row.media_assets[0].size_bytes,
+              status: row.media_assets[0].status,
+            }
+          : undefined,
       })),
       totalCount: count || 0,
     };
@@ -458,4 +467,59 @@ export async function saveAppSettings(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/admin");
   return { success: true };
+}
+
+/**
+ * Generates short-lived signed preview URL for admin media inspection.
+ * Strictly verifies admin role server-side.
+ */
+export async function getAdminMediaSignedUrl(storagePath: string): Promise<{ signedUrl?: string; error?: string }> {
+  const configured = await isSupabaseConfigured();
+  if (!configured) {
+    return { error: "Database not configured." };
+  }
+
+  const supabaseUser = await createServerSupabaseClient();
+  const { data: { user } } = await supabaseUser.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized. Admin session required." };
+  }
+
+  const adminClient = createAdminSupabaseClient();
+  const { data: profile } = await adminClient
+    .from("admin_profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (profile?.role !== "admin") {
+    return { error: "Forbidden. Admin role required." };
+  }
+
+  // Determine bucket and object path
+  let bucket = "bobfess-images";
+  let objectPath = storagePath;
+
+  if (storagePath.startsWith("bobfess-videos/")) {
+    bucket = "bobfess-videos";
+    objectPath = storagePath.replace("bobfess-videos/", "");
+  } else if (storagePath.startsWith("bobfess-images/")) {
+    bucket = "bobfess-images";
+    objectPath = storagePath.replace("bobfess-images/", "");
+  } else if (storagePath.startsWith("bobfess-attachments/")) {
+    bucket = "bobfess-attachments";
+    objectPath = storagePath.replace("bobfess-attachments/", "");
+  }
+
+  // Generate 15-minute signed preview URL
+  const { data, error } = await adminClient.storage
+    .from(bucket)
+    .createSignedUrl(objectPath, 900);
+
+  if (error || !data) {
+    return { error: "Failed to create signed media preview URL." };
+  }
+
+  return { signedUrl: data.signedUrl };
 }
