@@ -130,6 +130,101 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: "submission_slides_submission_id_fkey";
+            columns: ["submission_id"];
+            isOneToOne: false;
+            referencedRelation: "submissions";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      templates: {
+        Row: {
+          id: string;
+          name: string;
+          category: string;
+          dimensions: Json;
+          background_storage_path: string | null;
+          font_family: string;
+          font_file_path: string | null;
+          font_size_min: number;
+          font_size_max: number;
+          text_color: string;
+          line_height: number;
+          letter_spacing: number;
+          vertical_align: string;
+          layout_config: Json;
+          is_active: boolean;
+          version: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          category: string;
+          dimensions?: Json;
+          background_storage_path?: string | null;
+          font_family?: string;
+          font_file_path?: string | null;
+          font_size_min?: number;
+          font_size_max?: number;
+          text_color?: string;
+          line_height?: number;
+          letter_spacing?: number;
+          vertical_align?: string;
+          layout_config?: Json;
+          is_active?: boolean;
+          version?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          category?: string;
+          dimensions?: Json;
+          background_storage_path?: string | null;
+          font_family?: string;
+          font_file_path?: string | null;
+          font_size_min?: number;
+          font_size_max?: number;
+          text_color?: string;
+          line_height?: number;
+          letter_spacing?: number;
+          vertical_align?: string;
+          layout_config?: Json;
+          is_active?: boolean;
+          version?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      template_versions: {
+        Row: {
+          id: string;
+          template_id: string;
+          version: number;
+          snapshot: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          template_id: string;
+          version: number;
+          snapshot: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          template_id?: string;
+          version?: number;
+          snapshot?: Json;
+          created_at?: string;
+        };
         Relationships: [];
       };
       admin_profiles: {

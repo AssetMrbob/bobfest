@@ -9,7 +9,9 @@ import { Database } from "@/lib/supabase/types";
 
 export const IMAGE_BUCKET = "bobfess-images";
 export const VIDEO_BUCKET = "bobfess-videos";
-export const ALL_BOBFESS_BUCKETS = [IMAGE_BUCKET, VIDEO_BUCKET, "bobfess-attachments"];
+export const TEMPLATE_BUCKET = "bobfess-templates";
+export const PUBLISHED_BUCKET = "bobfess-published";
+export const ALL_BOBFESS_BUCKETS = [IMAGE_BUCKET, VIDEO_BUCKET, TEMPLATE_BUCKET, PUBLISHED_BUCKET, "bobfess-attachments"];
 
 export function getBucketForMediaType(mediaType: "image" | "video"): string {
   return mediaType === "image" ? IMAGE_BUCKET : VIDEO_BUCKET;

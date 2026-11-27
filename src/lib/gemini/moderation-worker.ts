@@ -200,10 +200,20 @@ export async function processSubmissionModeration(
   // 5. Check if submission has media attachments
   const hasMedia = Array.isArray(sub.media_assets) && sub.media_assets.some((m: { deleted_at: string | null }) => !m.deleted_at);
 
-  // 6. Execute Gemini Moderation
+  // 5b. Fetch all slides if multi-slide submission
+  const { data: slides } = await supabase
+    .from("submission_slides")
+    .select("*")
+    .eq("submission_id", sub.id)
+    .order("slide_order", { ascending: true });
+
+  const slideTexts = slides && slides.length > 0 ? slides.map((s) => s.message) : [sub.message];
+  const fullMessageContext = slideTexts.join("\n---\n");
+
+  // 6. Execute Gemini Moderation on complete combined context
   const startTime = Date.now();
   const modResult = await moderateContentWithGemini({
-    message: sub.message,
+    message: fullMessageContext,
     recipient: sub.recipient,
     hasMedia,
   });

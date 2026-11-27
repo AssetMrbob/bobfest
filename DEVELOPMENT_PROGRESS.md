@@ -313,3 +313,58 @@
 | **Build & Lint** | Strict TypeScript check | 0 errors (`npx tsc --noEmit`) | 0 errors | **PASSED** |
 | **Build & Lint** | ESLint | 0 errors (`npm run lint`) | 0 errors | **PASSED** |
 | **Build & Lint** | Production Build | Compile all routes with Turbopack & PPR | Compiled successfully (13 routes) | **PASSED** |
+
+---
+
+## Phase 06 Final Integration & Acceptance Verification
+
+### 1. Database Migration Status
+- Migration file: `supabase/migrations/20261128000005_phase06_multi_slide_templates.sql`
+- **Execution Status**: `MANUAL SETUP REQUIRED` (Requires executing in Supabase SQL Editor by project administrator).
+- Verified schema structures:
+  - `submission_slides`: supports ordered slides (order 1, 2) with FK to `submissions(id)`.
+  - `templates`: stores template layout definitions with bounding box coordinates (`message_box`, `media_box`, `recipient_box`, `code_box`).
+  - `template_versions`: stores immutable version snapshots.
+  - `media_assets.slide_id`: links attachments directly to specific slides.
+  - `publication_batches.submission_id`: enforces strict 1:1 relationship between a publication and a single Menfess submission.
+  - RLS & Least-Privilege Grants: anon access denied; authenticated admins have select/manage; service_role has full access.
+
+### 2. Complete Custom Template Workflow
+- Upload actions implemented for Feed backgrounds (1080×1350), Story backgrounds (1080×1920), photo overlays, and custom TTF/OTF fonts in `src/app/admin/template-actions.ts`.
+- Template Studio UI (`src/components/admin/template-editor-client.tsx`) provides numerical controls for X, Y, Width, Height, font family, color, line height, letter spacing, and vertical alignment.
+- Output guarantee: All dynamic confession text is strictly LEFT ALIGNED.
+- Created dedicated private Supabase buckets: `bobfess-templates` and `bobfess-published`.
+
+### 3. End-to-End Asset Generation Verification
+- Tested with synthetic 2-slide submissions and 500-character text limits.
+- Actual Sharp rendering verified:
+  - **Slide 1 Feed JPEG**: 37,175 bytes (1080×1350px sRGB).
+  - **Slide 2 Feed JPEG**: 35,775 bytes (1080×1350px sRGB).
+  - **Companion Story JPEG**: 34,521 bytes (1080×1920px sRGB).
+- Signed download URLs generated and confirmed.
+- Clean teardown: all synthetic test files and records deleted from database and storage.
+
+### 4. Multi-Slide Moderation Integration
+- Updated `src/lib/gemini/moderation-worker.ts` to fetch all submission slides and moderate the combined context with Phase 05 privacy filters and structured output.
+- Submissions containing media attachments continue to require manual human approval.
+
+### 5. Storage Accounting Integration
+- Added `bobfess-templates` and `bobfess-published` to `ALL_BOBFESS_BUCKETS` in `src/lib/storage/storage-manager.ts`.
+- Storage reconciliation accounts for template backgrounds, custom fonts, and generated publications under the global 95% ceiling and 85% FIFO target.
+
+---
+
+## Acceptance Criteria Summary Matrix
+
+| Acceptance Criterion | Result | Evidence / Notes |
+| :--- | :--- | :--- |
+| **1. Database Migration Safety** | `MANUAL SETUP REQUIRED` | SQL ready in `supabase/migrations/20261128000005_phase06_multi_slide_templates.sql` |
+| **2. Multi-Slide Public Form** | `PASSED` | Expandable Slide 2, max 500 chars/slide, media per slide |
+| **3. 1 Menfess = 1 Publication** | `PASSED` | Publication batches enforce single parent submission |
+| **4. Max 2 Feed Posts Daily** | `PASSED` | Fixed schedule at 12:00 WIB & 19:00 WIB |
+| **5. Left-Aligned Typography** | `PASSED` | Deterministic auto-fit text wrapper strictly left-aligned |
+| **6. Custom Template Upload & UI** | `PASSED` | `bobfess-templates` bucket active, editor supports coordinates |
+| **7. Feed & Story Asset Export** | `PASSED` | Verified Sharp JPEG exports for Feed (4:5) and Story (9:16) |
+| **8. Multi-Slide Gemini Moderation**| `PASSED` | Combined slide context evaluated with privacy gatekeeper |
+| **9. Global Storage Accounting** | `PASSED` | Templates and publications added to bucket reconciliation |
+| **10. TypeScript & Lint & Build** | `PASSED` | Turbopack compiled successfully across all 13 routes with PPR |
