@@ -80,7 +80,7 @@ export default function AdminTemplatesPage() {
               <Input
                 value={previewRecipient}
                 onChange={(e) => setPreviewRecipient(e.target.value)}
-                className="h-8 text-xs"
+                className="h-11 sm:h-8 text-base sm:text-xs"
                 placeholder="Recipient label"
               />
             </div>
@@ -92,7 +92,7 @@ export default function AdminTemplatesPage() {
                 value={previewText}
                 onChange={(e) => setPreviewText(e.target.value)}
                 rows={3}
-                className="text-xs leading-relaxed"
+                className="text-base sm:text-xs leading-relaxed"
                 placeholder="Slide message text..."
               />
             </div>
@@ -119,7 +119,7 @@ export default function AdminTemplatesPage() {
           </div>
 
           {/* 4:5 Aspect Ratio Container */}
-          <div className="max-w-md mx-auto aspect-[4/5] bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-8 flex flex-col justify-between shadow-none relative">
+          <div className="max-w-md mx-auto w-full aspect-[4/5] bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-5 sm:p-8 flex flex-col justify-between shadow-none relative">
             {/* Top Brand Watermark */}
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold tracking-tight text-[#171717]">

@@ -8,32 +8,33 @@ export function Footer() {
   const [modalState, setModalState] = React.useState<"guidelines" | "privacy" | null>(null);
 
   return (
-    <footer className="w-full py-8 mt-auto border-t border-[#E5E7EB] bg-[#FFFFFF]">
+    <footer className="w-full pt-8 pb-[max(2rem,env(safe-area-inset-bottom,1.5rem))] mt-auto border-t border-[#E5E7EB] bg-[#FFFFFF]">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#737373]">
-        <p className="text-center sm:text-left">
+        <p className="text-center sm:text-left text-xs">
           Anonymous to the public.
         </p>
 
-        <div className="flex items-center gap-4">
+        {/* Touch-friendly 44px hit areas for mobile users */}
+        <div className="flex items-center gap-1 sm:gap-4">
           <button
             onClick={() => setModalState("guidelines")}
-            className="hover:text-[#171717] transition-colors underline-offset-4 hover:underline"
+            className="min-h-[44px] inline-flex items-center px-2 text-xs text-[#737373] hover:text-[#171717] transition-colors underline-offset-4 hover:underline cursor-pointer"
           >
             Guidelines
           </button>
-          <span>·</span>
+          <span className="text-[#D1D5DB]">·</span>
           <button
             onClick={() => setModalState("privacy")}
-            className="hover:text-[#171717] transition-colors underline-offset-4 hover:underline"
+            className="min-h-[44px] inline-flex items-center px-2 text-xs text-[#737373] hover:text-[#171717] transition-colors underline-offset-4 hover:underline cursor-pointer"
           >
             Privacy
           </button>
-          <span>·</span>
+          <span className="text-[#D1D5DB]">·</span>
           <a
             href={APP_CONFIG.instagramUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-[#171717] transition-colors underline-offset-4 hover:underline"
+            className="min-h-[44px] inline-flex items-center px-2 text-xs text-[#737373] hover:text-[#171717] transition-colors underline-offset-4 hover:underline cursor-pointer"
           >
             Instagram
           </a>

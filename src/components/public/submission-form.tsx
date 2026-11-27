@@ -101,14 +101,14 @@ export function SubmissionForm() {
   // SUCCESS STATE
   if (formState === "success") {
     return (
-      <div className="w-full bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-8 sm:p-10 text-center animate-in fade-in duration-300">
-        <div className="mx-auto w-10 h-10 rounded-full bg-[#FAFAFA] border border-[#E5E7EB] flex items-center justify-center mb-4 text-[#2563EB]">
-          <CheckCircle2 className="w-5 h-5" />
+      <div className="w-full bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-6 sm:p-10 text-center animate-in fade-in duration-300">
+        <div className="mx-auto w-12 h-12 rounded-full bg-[#FAFAFA] border border-[#E5E7EB] flex items-center justify-center mb-4 text-[#2563EB]">
+          <CheckCircle2 className="w-6 h-6" />
         </div>
-        <h2 className="text-xl font-semibold tracking-tight text-[#171717] mb-2">
+        <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-[#171717] mb-2">
           Message sent.
         </h2>
-        <p className="text-sm text-[#737373] max-w-sm mx-auto mb-4 leading-relaxed">
+        <p className="text-xs sm:text-sm text-[#737373] max-w-sm mx-auto mb-4 leading-relaxed">
           Your message is awaiting moderation.
         </p>
 
@@ -124,7 +124,7 @@ export function SubmissionForm() {
             onClick={handleReset}
             variant="primary"
             size="md"
-            className="w-full sm:w-auto"
+            className="w-full sm:w-auto h-11"
           >
             Send another
           </Button>
@@ -141,7 +141,7 @@ export function SubmissionForm() {
       <form
         onSubmit={handleSubmit}
         noValidate
-        className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-6 sm:p-7 space-y-5"
+        className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-4 sm:p-7 space-y-4 sm:space-y-5"
       >
         {/* General Error Banner */}
         {formState === "error" && errors.general && (
@@ -155,7 +155,7 @@ export function SubmissionForm() {
               <button
                 type="button"
                 onClick={() => setFormState("idle")}
-                className="mt-1 text-xs text-[#DC2626] underline font-medium hover:text-[#991B1B]"
+                className="mt-1 text-xs text-[#DC2626] underline font-medium hover:text-[#991B1B] min-h-[32px] inline-flex items-center"
               >
                 Dismiss and edit
               </button>
@@ -178,10 +178,10 @@ export function SubmissionForm() {
             placeholder="Someone, maybe?"
             disabled={formState === "submitting"}
             maxLength={100}
-            className="h-9 text-xs"
+            autoComplete="off"
           />
           {errors.recipient && (
-            <p className="mt-1 text-xs text-[#EF4444]">{errors.recipient}</p>
+            <p className="mt-1.5 text-xs text-[#EF4444]">{errors.recipient}</p>
           )}
         </div>
 
@@ -206,13 +206,13 @@ export function SubmissionForm() {
 
           <Textarea
             id="message-textarea"
-            rows={5}
+            rows={4}
             value={message}
             onChange={handleMessageChange}
             placeholder="Write something..."
             error={!!errors.message || isOverLimit}
             disabled={formState === "submitting"}
-            className="text-sm leading-relaxed"
+            className="leading-relaxed"
           />
 
           {errors.message && (
@@ -223,18 +223,18 @@ export function SubmissionForm() {
           )}
         </div>
 
-        {/* Media Notice (Phase 03 Placeholder per specification) */}
-        <div className="p-2.5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg flex items-center justify-between text-xs text-[#737373]">
-          <span className="flex items-center gap-1.5 text-[11px]">
+        {/* Media Notice (Phase 03 Placeholder) */}
+        <div className="p-3 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg flex items-center justify-between text-xs text-[#737373]">
+          <span className="flex items-center gap-1.5 text-xs">
             <Lock className="w-3.5 h-3.5 text-[#A3A3A3]" />
-            Photo/video attachment coming in Phase 03
+            Photo/video attachment in Phase 03
           </span>
           <span className="text-[10px] font-mono uppercase text-[#A3A3A3]">
-            Media coming soon
+            Coming soon
           </span>
         </div>
 
-        {/* Submit Button */}
+        {/* Submit Button (48px height on mobile for primary thumb action) */}
         <div className="pt-2">
           <Button
             type="submit"
@@ -242,7 +242,7 @@ export function SubmissionForm() {
             size="lg"
             isLoading={formState === "submitting"}
             disabled={formState === "submitting" || isOverLimit}
-            className="w-full text-sm font-medium"
+            className="w-full text-base font-medium h-12"
           >
             Send anonymously
           </Button>

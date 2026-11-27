@@ -16,7 +16,30 @@ Comprehensive architecture, data contracts, security guidelines, and operational
 
 ---
 
-## 2. Technical Stack
+## 2. Global Mobile-First Standard (Permanent Project-Wide Requirement)
+
+Mobile-first is a mandatory architectural baseline for all current and future phases of BOBFESS.
+
+### 1. Viewport Matrix
+Designs and implementations must be tested and optimized on mobile viewports first before desktop adaptation:
+- **Small Mobile**: `320px` (iPhone SE 1st gen), `360px` (standard Android), `375px` (iPhone SE/Mini)
+- **Standard Mobile**: `390px` (iPhone 12/13/14/15), `414px` (iPhone Plus/Max), `430px` (iPhone Pro Max)
+- **Tablet & Desktop**: Fluid expansion (`md:`, `lg:`) with a centered maximum 500px column layout for submission forms.
+
+### 2. Browser & In-App Target Compatibility
+- **Primary Targets**: Instagram In-App Browser (WKWebView/Chrome WebView), iOS Safari, Android Chrome.
+- **Dynamic Viewport Heights**: Must use `min-h-dvh` instead of `min-h-screen` to prevent toolbar jumping and bottom clipping.
+- **Safe-Area Insets**: Proper padding for notches and dynamic island via `env(safe-area-inset-top)` and `env(safe-area-inset-bottom)`.
+
+### 3. Touch Ergonomics & Form Factors
+- **44×44px Minimum Touch Targets**: Every button, navigation item, modal close trigger, and table action must provide at least 44×44px hit area.
+- **16px Input Font Size (No iOS Auto-Zoom)**: All text inputs, textareas, and selects must use at least 16px (`text-base`) on mobile viewports to prevent iOS Safari from automatically zooming into the page.
+- **Zero Horizontal Overflow**: `overflow-x-hidden` on body container, wrapping text, and fluid elements.
+- **Mobile Admin Views**: Desktop tables must automatically adapt into touch-friendly cards/lists on mobile screens (`< 768px`) with one-tap moderation actions.
+
+---
+
+## 3. Technical Stack
 
 | Layer | Technology | Role |
 | :--- | :--- | :--- |

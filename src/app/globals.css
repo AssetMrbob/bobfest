@@ -21,6 +21,12 @@
   --color-border-main: #E5E7EB;
 }
 
+html {
+  min-height: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background-color: #FFFFFF;
   color: #171717;
@@ -28,12 +34,16 @@ body {
   letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  min-height: 100dvh;
+  /* Support dynamic safe area insets for notches, home indicator, and Instagram in-app browser */
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 /* Custom minimal scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -46,8 +56,13 @@ body {
   background: #D1D5DB;
 }
 
-/* Focus styles for keyboard navigation */
+/* Accessible focus styles for touch & keyboard */
 :focus-visible {
   outline: 2px solid #2563EB;
   outline-offset: 2px;
+}
+
+/* Prevent unwanted callout on mobile links */
+a, button {
+  -webkit-tap-highlight-color: transparent;
 }

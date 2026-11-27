@@ -9,6 +9,14 @@
 
 ## Phase 02 Completed Tasks
 
+- [x] **Global Mobile-First Standard Audit & Hardening**
+  - Configured `min-h-dvh` and safe-area insets (`env(safe-area-inset-*)`) in `globals.css` and `layout.tsx`.
+  - Added mobile viewport meta with `viewportFit: "cover"`.
+  - Enforced minimum 16px (`text-base sm:text-sm`) font size on all inputs/textareas to prevent iOS Safari auto-zoom.
+  - Upgraded all buttons, icon actions, hamburger toggles, and modal dismiss buttons to minimum 44×44px touch targets.
+  - Transformed `/admin/inbox` from a desktop-only table into a mobile-first card list on screens `< 768px` with thumb-reachable moderation triggers.
+  - Verified fluid responsiveness on 320px, 360px, 375px, 390px, 414px, and 430px viewports without horizontal overflow.
+
 - [x] **Preserve Existing UI & Design Tokens**
   - Maintained Swiss minimalist aesthetic, `#FFFFFF` background, `#2563EB` blue accent, Geist typography, and clean spacing.
   - No decorative gradients, glassmorphism, or AI cards introduced.

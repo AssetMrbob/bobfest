@@ -59,7 +59,7 @@ export default async function AdminSettingsPage() {
               <select
                 name="accept_submissions"
                 defaultValue={settings.accept_submissions ? "true" : "false"}
-                className="w-full h-9 px-3 text-xs bg-[#FFFFFF] border border-[#E5E7EB] rounded-[10px] text-[#171717] focus:ring-1 focus:ring-[#2563EB]"
+                className="w-full h-11 sm:h-9 px-3 text-base sm:text-xs bg-[#FFFFFF] border border-[#E5E7EB] rounded-[10px] text-[#171717] focus:ring-1 focus:ring-[#2563EB]"
               >
                 <option value="true">Enabled (Accepting incoming submissions)</option>
                 <option value="false">Paused (Reject new submissions with friendly notice)</option>
@@ -102,7 +102,7 @@ export default async function AdminSettingsPage() {
               <select
                 name="auto_publish_enabled"
                 defaultValue={settings.auto_publish_enabled ? "true" : "false"}
-                className="w-full h-9 px-3 text-xs bg-[#FFFFFF] border border-[#E5E7EB] rounded-[10px] text-[#171717] focus:ring-1 focus:ring-[#2563EB]"
+                className="w-full h-11 sm:h-9 px-3 text-base sm:text-xs bg-[#FFFFFF] border border-[#E5E7EB] rounded-[10px] text-[#171717] focus:ring-1 focus:ring-[#2563EB]"
               >
                 <option value="false">Disabled (Manual trigger only until Phase 04)</option>
                 <option value="true">Enabled (Automated publish at scheduled slots)</option>

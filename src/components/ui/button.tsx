@@ -8,6 +8,10 @@ export interface ButtonProps
   isLoading?: boolean;
 }
 
+/**
+ * Mobile-First Button
+ * Ensures minimum 44×44px touch target on mobile viewports for accessibility and ergonomic tapping.
+ */
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {
@@ -22,7 +26,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      "inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[#2563EB] focus-visible:outline-offset-2 disabled:opacity-50 disabled:pointer-events-none select-none rounded-[10px] cursor-pointer";
+      "inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[#2563EB] focus-visible:outline-offset-2 disabled:opacity-50 disabled:pointer-events-none select-none rounded-[10px] cursor-pointer touch-manipulation";
 
     const variantStyles = {
       primary:
@@ -38,9 +42,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const sizeStyles = {
-      sm: "h-8 px-3 text-xs tracking-tight",
-      md: "h-10 px-4 text-sm tracking-tight",
-      lg: "h-11 px-5 text-base tracking-tight",
+      sm: "min-h-[44px] sm:min-h-0 sm:h-8 px-3 text-xs tracking-tight",
+      md: "min-h-[44px] h-11 sm:h-10 px-4 text-sm tracking-tight",
+      lg: "min-h-[48px] h-12 sm:h-11 px-5 text-base tracking-tight",
     };
 
     return (

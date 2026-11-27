@@ -25,19 +25,19 @@ export function AdminStatCard({
   return (
     <div
       className={cn(
-        "p-4 bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl flex flex-col justify-between",
+        "p-3 sm:p-4 bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl flex flex-col justify-between",
         className
       )}
     >
-      <span className="text-xs font-medium text-[#737373] tracking-tight">
+      <span className="text-[11px] sm:text-xs font-medium text-[#737373] tracking-tight leading-tight">
         {label}
       </span>
-      <div className="mt-2 flex items-baseline justify-between">
-        <span className={cn("text-2xl font-semibold tracking-tight tabular-nums", statusColor)}>
+      <div className="mt-1.5 sm:mt-2 flex items-baseline justify-between">
+        <span className={cn("text-xl sm:text-2xl font-semibold tracking-tight tabular-nums", statusColor)}>
           {value}
         </span>
         {subValue && (
-          <span className="text-[11px] text-[#737373] tabular-nums">
+          <span className="text-[10px] sm:text-[11px] text-[#737373] tabular-nums">
             {subValue}
           </span>
         )}
