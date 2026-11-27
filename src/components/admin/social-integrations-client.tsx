@@ -24,6 +24,7 @@ import {
   updateBrandSettingsAction,
 } from "@/app/admin/social-actions";
 import { BrandSettings } from "@/lib/brand/brand-service";
+import { formatThreadsPayload } from "@/lib/threads/threads-formatter";
 
 interface SocialIntegrationsClientProps {
   initialSettings: {
@@ -73,7 +74,8 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
   const [threadsReply, setThreadsReply] = React.useState(initialSettings.threads_reply_enabled !== false);
   const [threadsPrefix, setThreadsPrefix] = React.useState(initialSettings.threads_prefix || "");
   const [threadsSuffix, setThreadsSuffix] = React.useState(initialSettings.threads_suffix || "");
-  const [threadsShowRefCode, setThreadsShowRefCode] = React.useState(initialSettings.threads_show_ref_code !== false);
+  const [threadsShowRefCode, setThreadsShowRefCode] = React.useState(Boolean(initialSettings.threads_show_ref_code));
+  const [livePreviewTab, setLivePreviewTab] = React.useState<"single" | "multi">("single");
   const [saveSuccess, setSaveSuccess] = React.useState(false);
   const [brandSuccess, setBrandSuccess] = React.useState(false);
 
@@ -590,23 +592,28 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
 
         {/* Threads Text Options */}
         <div className="pt-2 border-t border-[#E5E7EB] space-y-3 text-xs">
-          <h4 className="font-medium text-[#171717]">Threads Text Formatting Options</h4>
+          <div>
+            <h4 className="font-medium text-[#171717]">Threads Text Formatting Options</h4>
+            <p className="text-[11px] text-[#737373] mt-0.5">
+              Default: Clean, natural approved message published directly with zero automated branding prefixes, slide labels, or continuation headers.
+            </p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-[#737373] mb-1">Optional Prefix</label>
+              <label className="block text-[#737373] mb-1">Optional Administrator Prefix</label>
               <Input
                 value={threadsPrefix}
                 onChange={(e) => setThreadsPrefix(e.target.value)}
-                placeholder="e.g. [Kampung Inggris Fess]"
+                placeholder="Leave blank for clean text"
                 className="h-8 text-xs"
               />
             </div>
             <div>
-              <label className="block text-[#737373] mb-1">Optional Suffix / Hashtags</label>
+              <label className="block text-[#737373] mb-1">Optional Administrator Suffix / Hashtags</label>
               <Input
                 value={threadsSuffix}
                 onChange={(e) => setThreadsSuffix(e.target.value)}
-                placeholder="e.g. #KampungInggris"
+                placeholder="Leave blank for clean text (e.g. #KampungInggris)"
                 className="h-8 text-xs"
               />
             </div>
@@ -623,6 +630,102 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
               Include Menfess Tracking Code (e.g. #KI-ABC123) in Threads payload
             </label>
           </div>
+
+          {/* Live Threads Payload Preview Box */}
+          {(() => {
+            const sampleSingleSub = {
+              public_code: "KI-DEMO1",
+              message: "Halo semuanya! Mau tanya rekomendasi camp di Pare yang lingkungannya asik buat belajar IELTS dari nol? Makasih banyak sebelumnya!",
+            };
+            const sampleMultiSub = {
+              public_code: "KI-DEMO2",
+              message: "Mau cerita sedikit pengalaman 3 bulan di Pare. Awalnya takut banget gak bisa ngomong bahasa Inggris dan selalu malu tiap mau ngomong di kelas...",
+            };
+            const sampleMultiSlides = [
+              { slide_order: 1, message: sampleMultiSub.message },
+              { slide_order: 2, message: "Tapi setelah minggu kedua tutornya suportif banget dan teman-teman camp saling semangatin. Buat kalian yang masih ragu, gas aja ke Pare!" },
+            ];
+
+            const preview = formatThreadsPayload({
+              submission: livePreviewTab === "single" ? sampleSingleSub : sampleMultiSub,
+              slides: livePreviewTab === "single" ? null : sampleMultiSlides,
+              settings: {
+                threadsPrefix,
+                threadsSuffix,
+                threadsShowRefCode,
+              },
+            });
+
+            return (
+              <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl space-y-3 mt-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-semibold text-[#0F172A] text-xs">Live Threads Payload Preview</span>
+                    <p className="text-[10px] text-[#64748B]">
+                      Exact 1:1 match with actual Threads API publication payload
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 bg-[#E2E8F0] p-0.5 rounded text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setLivePreviewTab("single")}
+                      className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+                        livePreviewTab === "single"
+                          ? "bg-white font-medium text-[#0F172A] shadow-sm"
+                          : "text-[#64748B] hover:text-[#0F172A]"
+                      }`}
+                    >
+                      Single Slide
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLivePreviewTab("multi")}
+                      className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+                        livePreviewTab === "multi"
+                          ? "bg-white font-medium text-[#0F172A] shadow-sm"
+                          : "text-[#64748B] hover:text-[#0F172A]"
+                      }`}
+                    >
+                      Two Slides
+                    </button>
+                  </div>
+                </div>
+
+                {/* Root post */}
+                <div className="p-2.5 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
+                  <div className="flex items-center justify-between text-[10px] text-[#64748B]">
+                    <span className="font-medium text-[#2563EB] flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                      Root Post (threads_main)
+                    </span>
+                    <span className="font-mono">{preview.rootPost.charCount} / 500 chars</span>
+                  </div>
+                  <p className="whitespace-pre-wrap font-sans text-xs text-[#0F172A] leading-relaxed">
+                    {preview.rootPost.text}
+                  </p>
+                </div>
+
+                {/* Reply post if two-slide */}
+                {preview.replyPost && (
+                  <div className="p-2.5 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-[#64748B]">
+                      <span className="font-medium text-[#059669] flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#059669]" />
+                        Threaded Reply (threads_reply)
+                      </span>
+                      <span className="font-mono">{preview.replyPost.charCount} / 500 chars</span>
+                    </div>
+                    <p className="whitespace-pre-wrap font-sans text-xs text-[#0F172A] leading-relaxed">
+                      {preview.replyPost.text}
+                    </p>
+                    <p className="text-[10px] text-[#64748B] pt-0.5 italic">
+                      Direct reply to root post via reply_to_id. Zero slide labels or continuation headers.
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="flex justify-end pt-2">

@@ -6,6 +6,7 @@ import { verifyThreadsConnection, refreshThreadsToken, syncThreadsUsername } fro
 import { executeMultiPlatformPublishing } from "@/lib/publishing/multi-platform-orchestrator";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getBrandSettings, updateBrandSettings, BrandSettings } from "@/lib/brand/brand-service";
+import { formatThreadsPayload } from "@/lib/threads/threads-formatter";
 
 /**
  * Tests connection to Instagram Graph API (Unified Login).
@@ -110,4 +111,95 @@ export async function dryRunPublishBatchAction(batchId: string) {
   } catch (err) {
     return { error: (err as Error).message };
   }
+}
+
+/**
+ * Generates an accurate preview of the Threads payload for a scheduled batch.
+ * Guarantees exact match with the actual publishing payload by using
+ * formatThreadsPayload.
+ */
+export async function previewBatchThreadsPayloadAction(batchId: string) {
+  try {
+    const adminClient = createAdminSupabaseClient();
+    const { data: batch, error: bErr } = await adminClient
+      .from("publication_batches")
+      .select("id, submission_id")
+      .eq("id", batchId)
+      .single();
+
+    if (bErr || !batch?.submission_id) {
+      return { error: "Batch or submission not found." };
+    }
+
+    const { data: submission } = await adminClient
+      .from("submissions")
+      .select("id, public_code, message")
+      .eq("id", batch.submission_id)
+      .single();
+
+    if (!submission) {
+      return { error: "Submission not found." };
+    }
+
+    const { data: slides } = await adminClient
+      .from("submission_slides")
+      .select("slide_order, message")
+      .eq("submission_id", submission.id)
+      .order("slide_order", { ascending: true })
+      .limit(2);
+
+    const { data: settings } = await adminClient
+      .from("app_settings")
+      .select("threads_prefix, threads_suffix, threads_show_ref_code")
+      .eq("id", "global")
+      .maybeSingle();
+
+    const payload = formatThreadsPayload({
+      submission,
+      slides: slides || null,
+      settings: {
+        threadsPrefix: settings?.threads_prefix,
+        threadsSuffix: settings?.threads_suffix,
+        threadsShowRefCode: settings?.threads_show_ref_code,
+      },
+    });
+
+    return { success: true, payload, preview: payload, publicCode: submission.public_code };
+  } catch (err) {
+    return { error: (err as Error).message };
+  }
+}
+
+export const getThreadsBatchPreviewAction = previewBatchThreadsPayloadAction;
+
+/**
+ * Previews formatted Threads payload for arbitrary sample text and custom settings.
+ */
+export async function previewCustomThreadsPayloadAction(params: {
+  message: string;
+  slide2Message?: string;
+  publicCode?: string;
+  prefix?: string;
+  suffix?: string;
+  showRefCode?: boolean;
+}) {
+  const payload = formatThreadsPayload({
+    submission: {
+      public_code: params.publicCode || "KI-SAMPLE",
+      message: params.message,
+    },
+    slides: params.slide2Message
+      ? [
+          { slide_order: 1, message: params.message },
+          { slide_order: 2, message: params.slide2Message },
+        ]
+      : [{ slide_order: 1, message: params.message }],
+    settings: {
+      threadsPrefix: params.prefix,
+      threadsSuffix: params.suffix,
+      threadsShowRefCode: params.showRefCode,
+    },
+  });
+
+  return { success: true, payload };
 }

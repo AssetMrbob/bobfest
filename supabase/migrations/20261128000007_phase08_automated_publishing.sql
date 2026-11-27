@@ -408,6 +408,16 @@ GRANT EXECUTE ON FUNCTION public.release_distributed_lock_atomic TO service_role
 GRANT EXECUTE ON FUNCTION public.release_distributed_lock_atomic TO authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_next_queue_job_atomic TO service_role;
 
+-- 12. Enforce Clean Natural Threads Publishing Defaults
+-- Default to clean, natural text without branding prefixes or tracking codes
+ALTER TABLE public.app_settings 
+  ALTER COLUMN threads_show_ref_code SET DEFAULT false;
+
+-- Clean existing global defaults if uncustomized
+UPDATE public.app_settings 
+SET threads_show_ref_code = false 
+WHERE id = 'global' AND threads_show_ref_code IS TRUE;
+
 -- 12. Threads Publishing Format Correction: Default to clean natural text
 -- Strips automatic branding prefixes, hashtags, reference codes, or promotional CTAs by default.
 ALTER TABLE public.app_settings

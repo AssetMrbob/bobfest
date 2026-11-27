@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { Clock, Plus, Play } from "lucide-react";
+import { Clock, Plus, Play, Eye } from "lucide-react";
 import { enqueueSubmission, dequeueSubmission, cancelPublicationBatch } from "@/app/admin/actions";
-import { dryRunPublishBatchAction } from "@/app/admin/social-actions";
+import { dryRunPublishBatchAction, getThreadsBatchPreviewAction } from "@/app/admin/social-actions";
 import { formatDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { FormattedThreadsPayload } from "@/lib/threads/threads-formatter";
 
 interface QueueBatch {
   id: string;
@@ -55,6 +57,12 @@ export function QueueClient({ initialData }: QueueClientProps) {
   const { batches, queuedSubmissions, approvedUnqueued } = initialData;
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [testingBatchId, setTestingBatchId] = React.useState<string | null>(null);
+  const [previewLoadingId, setPreviewLoadingId] = React.useState<string | null>(null);
+  const [previewData, setPreviewData] = React.useState<{
+    batchId: string;
+    publicCode: string;
+    payload: FormattedThreadsPayload;
+  } | null>(null);
   const [dryRunReport, setDryRunReport] = React.useState<{
     batchId: string;
     overallStatus: string;
@@ -63,8 +71,29 @@ export function QueueClient({ initialData }: QueueClientProps) {
       publicationType: string;
       status: string;
       error?: string;
+      payloadText?: string;
     }>;
   } | null>(null);
+
+  const handlePreviewThreads = async (batchId: string) => {
+    setPreviewLoadingId(batchId);
+    try {
+      const res = await getThreadsBatchPreviewAction(batchId);
+      if (res.success && res.preview) {
+        setPreviewData({
+          batchId,
+          publicCode: res.publicCode || "BATCH",
+          payload: res.preview,
+        });
+      } else {
+        alert(res.error || "Failed to load Threads preview.");
+      }
+    } catch (e) {
+      alert(`Error loading preview: ${(e as Error).message}`);
+    } finally {
+      setPreviewLoadingId(null);
+    }
+  };
 
   const handleEnqueue = async (id: string) => {
     setIsProcessing(true);
@@ -154,6 +183,14 @@ export function QueueClient({ initialData }: QueueClientProps) {
                   </span>
                 </div>
                 {d.error && <p className="text-[11px] text-[#DC2626]">{d.error}</p>}
+                {d.payloadText && (
+                  <div className="mt-1 pt-1 border-t border-[#E2E8F0]">
+                    <span className="text-[10px] text-[#64748B] block font-mono">Payload ({d.payloadText.length} chars):</span>
+                    <p className="text-[11px] text-[#0F172A] whitespace-pre-wrap font-sans bg-[#F1F5F9] p-2 rounded mt-0.5">
+                      {d.payloadText}
+                    </p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -208,6 +245,17 @@ export function QueueClient({ initialData }: QueueClientProps) {
                   </div>
 
                   <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePreviewThreads(batch.id)}
+                      disabled={previewLoadingId === batch.id || isProcessing}
+                      className="h-8 text-xs cursor-pointer flex items-center gap-1 text-[#2563EB] border-[#BFDBFE] hover:bg-[#EFF6FF]"
+                    >
+                      <Eye className={`w-3.5 h-3.5 ${previewLoadingId === batch.id ? "animate-spin" : ""}`} />
+                      <span>{previewLoadingId === batch.id ? "Loading..." : "Preview Threads"}</span>
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -301,6 +349,89 @@ export function QueueClient({ initialData }: QueueClientProps) {
           </div>
         )}
       </div>
+
+      {/* Threads Payload Preview Modal */}
+      {previewData && (
+        <Modal
+          isOpen={!!previewData}
+          onClose={() => setPreviewData(null)}
+          title={`Threads Payload Preview · ${previewData.publicCode}`}
+          description="Exact 1:1 match with actual Threads API payload. Verified clean, natural text with zero automated branding prefixes, slide labels, or continuation headers."
+        >
+          <div className="space-y-4 text-xs">
+            {/* Status overview */}
+            <div className="flex items-center justify-between p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
+              <span className="text-[#64748B]">Publication Structure:</span>
+              <span className="font-semibold text-[#0F172A]">
+                {previewData.payload.isMultiSlide ? "2-Slide Thread (Root Post + Reply)" : "Single-Slide Direct Post"}
+              </span>
+            </div>
+
+            {/* Root Post (Slide 1) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-[#0F172A] flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#10B981]" />
+                  Root Post (threads_main)
+                </span>
+                <span className={`font-mono text-[11px] ${
+                  previewData.payload.rootPost.isExceedingLimit ? "text-[#DC2626] font-bold" : "text-[#64748B]"
+                }`}>
+                  {previewData.payload.rootPost.charCount} / 500 chars
+                </span>
+              </div>
+              <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
+                <p className="whitespace-pre-wrap font-sans text-xs text-[#0F172A] leading-relaxed">
+                  {previewData.payload.rootPost.text}
+                </p>
+              </div>
+              {previewData.payload.rootPost.error && (
+                <p className="text-[11px] text-[#DC2626]">{previewData.payload.rootPost.error}</p>
+              )}
+            </div>
+
+            {/* Threaded Reply (Slide 2, if multi-slide) */}
+            {previewData.payload.replyPost && (
+              <div className="space-y-1.5 pt-2 border-t border-[#E2E8F0]">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-[#0F172A] flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#3B82F6]" />
+                    Threaded Reply (threads_reply)
+                  </span>
+                  <span className={`font-mono text-[11px] ${
+                    previewData.payload.replyPost.isExceedingLimit ? "text-[#DC2626] font-bold" : "text-[#64748B]"
+                  }`}>
+                    {previewData.payload.replyPost.charCount} / 500 chars
+                  </span>
+                </div>
+                <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
+                  <p className="whitespace-pre-wrap font-sans text-xs text-[#0F172A] leading-relaxed">
+                    {previewData.payload.replyPost.text}
+                  </p>
+                </div>
+                {previewData.payload.replyPost.error && (
+                  <p className="text-[11px] text-[#DC2626]">{previewData.payload.replyPost.error}</p>
+                )}
+                <p className="text-[11px] text-[#64748B] italic">
+                  Published as a direct reply to the root post with reply_to_id. No slide labels or continuation headers.
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPreviewData(null)}
+                className="h-8 text-xs cursor-pointer"
+              >
+                Close Preview
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

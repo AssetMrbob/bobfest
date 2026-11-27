@@ -18,6 +18,7 @@ export interface LockAcquisition {
  */
 export class DistributedLockManager {
   private static workerInstanceId = `worker-${Math.random().toString(36).substring(2, 9)}-${Date.now()}`;
+  private static inMemoryLockFallback = new Map<string, { ownerId: string; expiresAt: number; fencingToken: number }>();
 
   public static getWorkerId(): string {
     return this.workerInstanceId;
@@ -68,12 +69,30 @@ export class DistributedLockManager {
         .maybeSingle();
 
       if (fetchErr && fetchErr.code !== "PGRST116") {
-        // Table might not exist yet before migration
+        // Table does not exist in DB yet before migration -> in-memory mutual exclusion fallback
+        const existingLocal = DistributedLockManager.inMemoryLockFallback.get(lockKey);
+        const nowMs = now.getTime();
+        if (existingLocal && existingLocal.expiresAt > nowMs && existingLocal.ownerId !== ownerId) {
+          return {
+            acquired: false,
+            lockKey,
+            ownerId: existingLocal.ownerId,
+            fencingToken: existingLocal.fencingToken,
+            expiresAt: new Date(existingLocal.expiresAt).toISOString(),
+            error: "Lock active by another owner (fallback mode).",
+          };
+        }
+        const fencing = (existingLocal?.fencingToken || 0) + 1;
+        DistributedLockManager.inMemoryLockFallback.set(lockKey, {
+          ownerId,
+          expiresAt: nowMs + ttlSeconds * 1000,
+          fencingToken: fencing,
+        });
         return {
-          acquired: true, // Graceful single-instance fallback
+          acquired: true,
           lockKey,
           ownerId,
-          fencingToken: 1,
+          fencingToken: fencing,
           expiresAt,
         };
       }
@@ -138,6 +157,11 @@ export class DistributedLockManager {
     ownerId: string = this.workerInstanceId,
     fencingToken?: number
   ): Promise<boolean> {
+    const local = DistributedLockManager.inMemoryLockFallback.get(lockKey);
+    if (local && local.ownerId === ownerId) {
+      DistributedLockManager.inMemoryLockFallback.delete(lockKey);
+    }
+
     const adminClient = createAdminSupabaseClient();
 
     try {
