@@ -69,7 +69,17 @@ export class DistributedLockManager {
         .maybeSingle();
 
       if (fetchErr && fetchErr.code !== "PGRST116") {
-        // Table does not exist in DB yet before migration -> in-memory mutual exclusion fallback
+        // Production distributed locking MUST fail closed without in-memory fallback.
+        // Granting in-memory locks across serverless containers risks split-brain duplicate publishing.
+        if (process.env.NODE_ENV === "production") {
+          return {
+            acquired: false,
+            lockKey,
+            error: `Production distributed lock failed closed: database table unavailable (${fetchErr.message})`,
+          };
+        }
+
+        // Table does not exist in DB yet before migration -> in-memory mutual exclusion fallback (DEV / TEST ONLY)
         const existingLocal = DistributedLockManager.inMemoryLockFallback.get(lockKey);
         const nowMs = now.getTime();
         if (existingLocal && existingLocal.expiresAt > nowMs && existingLocal.ownerId !== ownerId) {

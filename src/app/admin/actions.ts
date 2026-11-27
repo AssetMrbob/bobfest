@@ -170,7 +170,10 @@ export async function getDashboardMetrics(dateRange: "today" | "7d" | "30d" | "a
     }
 
     const getCount = async (status?: SubmissionStatus) => {
-      let q = supabase.from("submissions").select("*", { count: "exact", head: true });
+      let q = supabase
+        .from("submissions")
+        .select("*", { count: "exact", head: true })
+        .not("public_code", "ilike", "TEST%");
       if (status) q = q.eq("status", status);
       if (dateFilter) q = q.gte("created_at", dateFilter);
       const res = await q;
@@ -664,24 +667,27 @@ export async function getPublishingQueue() {
   try {
     const supabase = createAdminSupabaseClient();
 
-    // 1. Fetch batches
+    // 1. Fetch batches (exclude archived or cancelled)
     const { data: batches } = await supabase
       .from("publication_batches")
       .select("*, publication_items(*, submissions(*))")
+      .not("status", "in", '("archived","cancelled")')
       .order("scheduled_time", { ascending: true });
 
-    // 2. Fetch queued submissions
+    // 2. Fetch queued submissions (exclude synthetic test records)
     const { data: queued } = await supabase
       .from("submissions")
       .select("*, media_assets(*)")
       .eq("status", "queued")
+      .not("public_code", "ilike", "TEST%")
       .order("created_at", { ascending: true });
 
-    // 3. Fetch approved submissions not yet queued
+    // 3. Fetch approved submissions not yet queued (exclude synthetic test records)
     const { data: approved } = await supabase
       .from("submissions")
       .select("*, media_assets(*)")
       .eq("status", "approved")
+      .not("public_code", "ilike", "TEST%")
       .order("created_at", { ascending: true });
 
     return {

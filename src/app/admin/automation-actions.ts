@@ -57,16 +57,18 @@ export async function getAutomationStatusAction(): Promise<AutomationDashboardDa
     .eq("id", "global")
     .maybeSingle();
 
-  // 3. Queue & moderation metrics
+  // 3. Queue & moderation metrics (exclude synthetic test records)
   const { count: pendingMod } = await adminClient
     .from("submissions")
     .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .not("public_code", "ilike", "TEST%");
 
   const { count: approvedCount } = await adminClient
     .from("submissions")
     .select("id", { count: "exact", head: true })
-    .eq("status", "approved");
+    .eq("status", "approved")
+    .not("public_code", "ilike", "TEST%");
 
   const { count: retryCount } = await adminClient
     .from("platform_deliveries")

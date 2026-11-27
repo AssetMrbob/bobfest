@@ -88,6 +88,11 @@ export async function executeMultiPlatformPublishing(params: {
     throw new Error(`Submission not found for batch ${params.batchId}`);
   }
 
+  // Strictly exclude synthetic test submissions from live publishing
+  if (submission.public_code.toUpperCase().startsWith("TEST")) {
+    throw new Error(`Test submission ${submission.public_code} is excluded from live publishing`);
+  }
+
   // Fetch ordered slides (strictly maximum 2 slides per submission)
   const { data: slides } = await adminClient
     .from("submission_slides")
