@@ -181,6 +181,12 @@ export async function executeMultiPlatformPublishing(params: {
           throw new Error(containerRes.error || "Failed to create feed container");
         }
 
+        // Persist container ID before publishing
+        await adminClient.from("platform_deliveries").update({
+          container_id: containerRes.containerId,
+          status: "container_created",
+        }).match({ batch_id: batch.id, platform: "instagram", publication_type: "feed" });
+
         const pubRes = await publishInstagramContainer(containerRes.containerId);
         if (pubRes.error || !pubRes.publishedMediaId) {
           throw new Error(pubRes.error || "Failed to publish feed container");
@@ -270,6 +276,12 @@ export async function executeMultiPlatformPublishing(params: {
           throw new Error(storyContainer.error || "Failed to create Story container");
         }
 
+        // Persist container ID before publishing
+        await adminClient.from("platform_deliveries").update({
+          container_id: storyContainer.containerId,
+          status: "container_created",
+        }).match({ batch_id: batch.id, platform: "instagram", publication_type: "story" });
+
         const storyPub = await publishInstagramContainer(storyContainer.containerId);
         if (storyPub.error || !storyPub.publishedMediaId) {
           throw new Error(storyPub.error || "Failed to publish Story");
@@ -323,77 +335,117 @@ export async function executeMultiPlatformPublishing(params: {
       permalink: existingThreadsMain.permalink || undefined,
     });
   } else if (threadsEnabled && slideList.length > 0) {
-    const slide1Text = slideList[0].message;
+    const rawSlide1Text = slideList[0].message;
     const refTag = settings?.threads_show_ref_code ? `\n\n#${submission.public_code}` : "";
     const prefix = settings?.threads_prefix ? `${settings.threads_prefix}\n\n` : "";
     const suffix = settings?.threads_suffix ? `\n\n${settings.threads_suffix}` : "";
 
-    // Fit text strictly within Threads 500-char limit
-    let rootText = `${prefix}${slide1Text}${refTag}${suffix}`;
-    if (rootText.length > 500) {
-      rootText = slide1Text.slice(0, 500);
-    }
-
-    if (params.dryRun) {
+    // Text formatting with ZERO silent truncation:
+    // Rule:
+    // 1. Try full payload (prefix + message + refTag + suffix) <= 500 chars.
+    // 2. If it exceeds 500 chars, omit optional branding additions (prefix, suffix, refTag) progressively.
+    // 3. If raw approved message itself exceeds 500 chars, DO NOT silently truncate. Hold delivery for manual review.
+    let rootText = "";
+    if (rawSlide1Text.length > 500) {
       deliveries.push({
         platform: "threads",
         publicationType: "threads_main",
-        status: "published",
-        mediaId: "dry_run_threads_root_id",
-        permalink: "https://threads.net/@kampunginggrisfess/post/dry_run",
+        status: "failed",
+        error: `Message text (${rawSlide1Text.length} chars) exceeds Threads limit of 500 chars without truncation. Held for manual review.`,
       });
-      threadsRootId = "dry_run_threads_root_id";
-    } else {
+
       await adminClient.from("platform_deliveries").upsert({
         batch_id: batch.id,
         submission_id: submission.id,
         platform: "threads",
         publication_type: "threads_main",
-        status: "processing",
+        status: "needs_review",
         scheduled_time: new Date().toISOString(),
-        last_attempt_at: new Date().toISOString(),
+        sanitized_error_message: `Message text (${rawSlide1Text.length} chars) exceeds Threads limit of 500 chars.`,
       }, { onConflict: "batch_id,platform,publication_type" });
-
-      try {
-        const containerRes = await createThreadsContainer({ text: rootText });
-        if (containerRes.error || !containerRes.containerId) {
-          throw new Error(containerRes.error || "Failed to create Threads main container");
+    } else {
+      const fullText = `${prefix}${rawSlide1Text}${refTag}${suffix}`;
+      if (fullText.length <= 500) {
+        rootText = fullText;
+      } else {
+        const textWithRef = `${rawSlide1Text}${refTag}`;
+        if (textWithRef.length <= 500) {
+          rootText = textWithRef;
+        } else {
+          // Fallback strictly to original raw approved message without additions
+          rootText = rawSlide1Text;
         }
+      }
+    }
 
-        const pubRes = await publishThreadsContainer(containerRes.containerId);
-        if (pubRes.error || !pubRes.publishedMediaId) {
-          throw new Error(pubRes.error || "Failed to publish Threads main container");
-        }
-
-        threadsRootId = pubRes.publishedMediaId;
+    if (rootText) {
+      if (params.dryRun) {
         deliveries.push({
           platform: "threads",
           publicationType: "threads_main",
           status: "published",
-          mediaId: threadsRootId,
-          permalink: pubRes.permalink,
+          mediaId: "dry_run_threads_root_id",
+          permalink: "https://threads.net/@kampunginggrisfess/post/dry_run",
         });
-
-        await adminClient.from("platform_deliveries").update({
-          status: "published",
-          published_media_id: threadsRootId,
-          permalink: pubRes.permalink || null,
-          published_at: new Date().toISOString(),
-        }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_main" });
-
-      } catch (err) {
-        const errMsg = (err as Error).message;
-        deliveries.push({
+        threadsRootId = "dry_run_threads_root_id";
+      } else {
+        await adminClient.from("platform_deliveries").upsert({
+          batch_id: batch.id,
+          submission_id: submission.id,
           platform: "threads",
-          publicationType: "threads_main",
-          status: "failed",
-          error: errMsg,
-        });
+          publication_type: "threads_main",
+          status: "processing",
+          scheduled_time: new Date().toISOString(),
+          last_attempt_at: new Date().toISOString(),
+        }, { onConflict: "batch_id,platform,publication_type" });
 
-        await adminClient.from("platform_deliveries").update({
-          status: "failed",
-          sanitized_error_message: errMsg,
-        }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_main" });
+        try {
+          const containerRes = await createThreadsContainer({ text: rootText });
+          if (containerRes.error || !containerRes.containerId) {
+            throw new Error(containerRes.error || "Failed to create Threads main container");
+          }
+
+          // Persist container ID before publishing
+          await adminClient.from("platform_deliveries").update({
+            container_id: containerRes.containerId,
+            status: "container_created",
+          }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_main" });
+
+          const pubRes = await publishThreadsContainer(containerRes.containerId);
+          if (pubRes.error || !pubRes.publishedMediaId) {
+            throw new Error(pubRes.error || "Failed to publish Threads main container");
+          }
+
+          threadsRootId = pubRes.publishedMediaId;
+          deliveries.push({
+            platform: "threads",
+            publicationType: "threads_main",
+            status: "published",
+            mediaId: threadsRootId,
+            permalink: pubRes.permalink,
+          });
+
+          await adminClient.from("platform_deliveries").update({
+            status: "published",
+            published_media_id: threadsRootId,
+            permalink: pubRes.permalink || null,
+            published_at: new Date().toISOString(),
+          }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_main" });
+
+        } catch (err) {
+          const errMsg = (err as Error).message;
+          deliveries.push({
+            platform: "threads",
+            publicationType: "threads_main",
+            status: "failed",
+            error: errMsg,
+          });
+
+          await adminClient.from("platform_deliveries").update({
+            status: "failed",
+            sanitized_error_message: errMsg,
+          }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_main" });
+        }
       }
     }
   }
@@ -425,60 +477,85 @@ export async function executeMultiPlatformPublishing(params: {
         permalink: "https://threads.net/@kampunginggrisfess/post/dry_run_reply",
       });
     } else {
-      await adminClient.from("platform_deliveries").upsert({
-        batch_id: batch.id,
-        submission_id: submission.id,
-        platform: "threads",
-        publication_type: "threads_reply",
-        status: "processing",
-        scheduled_time: new Date().toISOString(),
-        last_attempt_at: new Date().toISOString(),
-      }, { onConflict: "batch_id,platform,publication_type" });
-
-      try {
-        const slide2Text = slideList[1].message.slice(0, 500);
-        const replyContainer = await createThreadsContainer({
-          text: slide2Text,
-          replyToId: threadsRootId,
-        });
-
-        if (replyContainer.error || !replyContainer.containerId) {
-          throw new Error(replyContainer.error || "Failed to create Threads reply container");
-        }
-
-        const replyPub = await publishThreadsContainer(replyContainer.containerId);
-        if (replyPub.error || !replyPub.publishedMediaId) {
-          throw new Error(replyPub.error || "Failed to publish Threads reply");
-        }
-
-        deliveries.push({
-          platform: "threads",
-          publicationType: "threads_reply",
-          status: "published",
-          mediaId: replyPub.publishedMediaId,
-          permalink: replyPub.permalink,
-        });
-
-        await adminClient.from("platform_deliveries").update({
-          status: "published",
-          published_media_id: replyPub.publishedMediaId,
-          permalink: replyPub.permalink || null,
-          published_at: new Date().toISOString(),
-        }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_reply" });
-
-      } catch (err) {
-        const errMsg = (err as Error).message;
+      const rawSlide2Text = slideList[1].message;
+      if (rawSlide2Text.length > 500) {
         deliveries.push({
           platform: "threads",
           publicationType: "threads_reply",
           status: "failed",
-          error: errMsg,
+          error: `Slide 2 text (${rawSlide2Text.length} chars) exceeds Threads limit of 500 chars. Held for manual review.`,
         });
 
-        await adminClient.from("platform_deliveries").update({
-          status: "failed",
-          sanitized_error_message: errMsg,
-        }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_reply" });
+        await adminClient.from("platform_deliveries").upsert({
+          batch_id: batch.id,
+          submission_id: submission.id,
+          platform: "threads",
+          publication_type: "threads_reply",
+          status: "needs_review",
+          scheduled_time: new Date().toISOString(),
+          sanitized_error_message: `Slide 2 message (${rawSlide2Text.length} chars) exceeds 500 chars.`,
+        }, { onConflict: "batch_id,platform,publication_type" });
+      } else {
+        await adminClient.from("platform_deliveries").upsert({
+          batch_id: batch.id,
+          submission_id: submission.id,
+          platform: "threads",
+          publication_type: "threads_reply",
+          status: "processing",
+          scheduled_time: new Date().toISOString(),
+          last_attempt_at: new Date().toISOString(),
+        }, { onConflict: "batch_id,platform,publication_type" });
+
+        try {
+          const replyContainer = await createThreadsContainer({
+            text: rawSlide2Text,
+            replyToId: threadsRootId,
+          });
+
+          if (replyContainer.error || !replyContainer.containerId) {
+            throw new Error(replyContainer.error || "Failed to create Threads reply container");
+          }
+
+          // Persist container ID before publishing
+          await adminClient.from("platform_deliveries").update({
+            container_id: replyContainer.containerId,
+            status: "container_created",
+          }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_reply" });
+
+          const replyPub = await publishThreadsContainer(replyContainer.containerId);
+          if (replyPub.error || !replyPub.publishedMediaId) {
+            throw new Error(replyPub.error || "Failed to publish Threads reply");
+          }
+
+          deliveries.push({
+            platform: "threads",
+            publicationType: "threads_reply",
+            status: "published",
+            mediaId: replyPub.publishedMediaId,
+            permalink: replyPub.permalink,
+          });
+
+          await adminClient.from("platform_deliveries").update({
+            status: "published",
+            published_media_id: replyPub.publishedMediaId,
+            permalink: replyPub.permalink || null,
+            published_at: new Date().toISOString(),
+          }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_reply" });
+
+        } catch (err) {
+          const errMsg = (err as Error).message;
+          deliveries.push({
+            platform: "threads",
+            publicationType: "threads_reply",
+            status: "failed",
+            error: errMsg,
+          });
+
+          await adminClient.from("platform_deliveries").update({
+            status: "failed",
+            sanitized_error_message: errMsg,
+          }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_reply" });
+        }
       }
     }
   }

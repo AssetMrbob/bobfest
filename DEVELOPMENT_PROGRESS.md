@@ -434,4 +434,54 @@
 | **5. Storage Protection** | Signed URL Meta Ingestion | Verified live: `bobfess-published` bucket generates signed URLs with 1-hour expiry, verified via HTTP HEAD (200 image/png). Private bucket access preserved. | **PASSED** |
 | **6. Live Test Preparation** | Synthetic Test Fixtures | Prepared synthetic test fixtures for single Feed, 2-slide carousel, Story, Threads root, and Threads reply under `@kampunginggrisfess`. Awaiting explicit admin approval before live execution. | **PASSED** |
 | **7. Production Readiness** | Meta App Review & App Mode | App currently in Development Mode. Production publishing for non-developer users requires App Review submission, Business Verification, and live Privacy/Data Deletion URLs. | **MANUAL SETUP REQUIRED** |
-| **8. Final Verification** | Types, Linting & Production Build | `npx tsc --noEmit` passed (0 errors), `npm run lint` passed (0 errors), `npm run build` compiled all routes successfully. | **PASSED** |
+### 5. Controlled Live Publishing Acceptance Tests (November 28, 2026)
+
+Strictly authorized controlled live publishing tests executed to `@kampunginggrisfess` on Instagram and Threads. Maximum authorized publications strictly observed (2 Feed posts, 2 Stories, 2 Threads roots, 1 continuation reply).
+
+#### Live Test 01 — Single-Slide Submission (`TEST01-9494`)
+- **Submission ID**: `c3e4a28c-5e7e-490a-8313-88fd2efb0593`
+- **Batch ID**: `1522bee7-afb9-4b77-9f85-fcd5d2ff45a5`
+- **Target Account**: `@kampunginggrisfess` (IG: `17841480301270114`, Threads: `29202039439462395`)
+- **Instagram Feed**:
+  - Container ID: `17869622178676710`
+  - Published Media ID: `17989800102085898`
+  - Status: `published`
+  - Permalink: [https://www.instagram.com/p/DgQa04lAVg8/](https://www.instagram.com/p/DgQa04lAVg8/)
+- **Instagram Story**:
+  - Container ID: `17869622232676710`
+  - Published Media ID: `17888806605625498`
+  - Status: `published` (published strictly after Feed success)
+- **Threads Root Post**:
+  - Container ID: `17928954855222195`
+  - Published Media ID: `18085676645387857`
+  - Status: `published`
+  - Permalink: [https://www.threads.com/@kampunginggrisfess/post/DgQa3xmgbuO](https://www.threads.com/@kampunginggrisfess/post/DgQa3xmgbuO)
+
+#### Live Test 02 — Two-Slide Submission & Continuation (`TEST02-1050`)
+- **Submission ID**: `e0ef6838-e531-4cc7-8cb9-58d030734882`
+- **Batch ID**: `4b95d62a-7002-42b8-a8db-96398a43bd34`
+- **Instagram Carousel (2 Slides)**:
+  - Child Container 1: `17869622403676710`
+  - Child Container 2: `17869622421676710`
+  - Parent Carousel Container: `17869622442676710`
+  - Published Media ID: `18118941074025307`
+  - Status: `published` (`CAROUSEL_ALBUM` verified with 2 children `18080646686772888` and `18150470662585703`)
+  - Permalink: [https://www.instagram.com/p/DgQbD4JgUED/](https://www.instagram.com/p/DgQbD4JgUED/)
+- **Instagram Story**:
+  - Published Media ID: `18127953442705756`
+  - Status: `published`
+- **Threads Root Post (Slide 1)**:
+  - Published Media ID: `18117182933035404`
+  - Status: `published`
+  - Permalink: [https://www.threads.com/@kampunginggrisfess/post/DgQbGtBgeHK](https://www.threads.com/@kampunginggrisfess/post/DgQbGtBgeHK)
+- **Threads Continuation Reply (Slide 2)**:
+  - Published Media ID: `17984732403134817`
+  - Status: `published` (pinned to root `18117182933035404` via `reply_to_id`)
+  - Permalink: [https://www.threads.com/@kampunginggrisfess/post/DgQbIJcgZwC](https://www.threads.com/@kampunginggrisfess/post/DgQbIJcgZwC)
+
+#### Production Readiness & Meta App Review Analysis (Single-Owner Architecture)
+- **Architecture**: The application operates as a **single-owner automated publisher** (owned and maintained exclusively by Mr.BOB Kampung Inggris for `@kampunginggrisfess`). Public users visit the website and submit anonymous confessions to Supabase; they **never connect** their own personal Instagram or Threads accounts and never authenticate via Meta OAuth.
+- **Access Level Finding**: Because all API calls are made using the app owner / admin developer token for the app's own registered Instagram Business Account and Threads Profile, **Development Mode with Standard Access** is fully functional and valid for this owner-operated publishing architecture.
+- **When is App Review / Advanced Access Required?**: Meta documentation dictates that Advanced Access and App Review are strictly required only when an application accesses data or publishes content on behalf of **external, non-developer third-party users**. Since `@kampunginggrisfess` is owned by the developer account, public web users do not interact with Meta OAuth.
+- **Business Verification**: Required by Meta if the app is converted to Live Mode for third parties, but not required to maintain internal automation on owner-owned profiles.
+- **Phase 08 Preparedness**: Distributed token refresh locking and background worker coordination are documented as Phase 08 prerequisites. Automatic scheduler remains disabled.
