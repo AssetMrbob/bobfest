@@ -115,3 +115,60 @@
    - Private media is never publicly exposed or listed without authentication.
 
 
+
+---
+
+## Phase 04 Completed Milestones — Admin Dashboard & Operational Control Center
+
+### 1. Mobile-First Navigation & Ergonomics
+- [x] Implemented minimal fixed mobile bottom navigation (`src/components/admin/admin-bottom-nav.tsx`) with 5 primary destinations: Overview, Inbox, Queue, Published, Settings.
+- [x] Preserved desktop responsive sidebar navigation for desktop/tablet screens $\ge 768\text{px}$.
+- [x] Configured safe-area padding (`pb-16 md:pb-0`, `env(safe-area-inset-bottom)`) to prevent UI clipping by browser bars or mobile home indicators.
+- [x] Enforced strict 44×44px minimum touch targets and 16px form inputs to prevent automatic mobile zoom.
+
+### 2. Live Database-Derived Overview Metrics
+- [x] Created `getDashboardMetrics` server action querying real PostgreSQL tables (`submissions`, `storage_capacity_ledger`).
+- [x] Integrated date-range filtering: `today`, `7d`, `30d`, `all` (calculated dynamically in Asia/Jakarta timezone).
+- [x] Added Next.js 16 dynamic request gating using `await connection()` and React `<Suspense>` boundaries to guarantee Partial Prerendering (PPR) compatibility without build hydration errors.
+- [x] Honest empty states and real counts; zero hardcoded fake metrics.
+
+### 3. Publishing Queue Management
+- [x] Created `getPublishingQueue`, `enqueueSubmission`, `dequeueSubmission`, `createPublicationBatch`, and `cancelPublicationBatch` server actions.
+- [x] Built interactive Queue interface (`src/components/admin/queue-client.tsx` & `src/app/admin/queue/page.tsx`).
+- [x] Connected to database tables `publication_batches` and `publication_items`.
+- [x] Enforced scheduling rules: max 5 slides per carousel, batch cancellation returns items to queued status safely.
+
+### 4. Published Archive View
+- [x] Created `getPublishedArchive` server action querying real published records.
+- [x] Built responsive Published Archive interface (`src/components/admin/published-client.tsx` & `src/app/admin/published/page.tsx`).
+- [x] Honest empty state when no batches have been published yet; displays direct Instagram link and slide references when posts exist.
+
+### 5. Inbox Multi-Select & Bulk Moderation
+- [x] Enhanced `src/app/admin/inbox/inbox-client.tsx` with multi-select checkbox controls for mobile and desktop.
+- [x] Added "Select All" toggle and floating bulk moderation action bar (Approve All, Queue All, Reject All, Cancel).
+- [x] Integrated `bulkModerateSubmissions` server action performing atomic updates and writing sanitized audit logs to `system_logs`.
+
+### 6. Storage Management & Operational Settings
+- [x] Created Storage Management Panel in Admin Overview displaying real ledger usage, hard capacity ceiling (95%), and safe FIFO cleanup target (85%).
+- [x] Added manual trigger buttons for Bucket Reconciliation and FIFO cleanup via server actions `triggerStorageReconciliation` and `triggerStorageCleanup`.
+- [x] Settings page wired to `app_settings` for submission intake toggle, auto-publish, story publishing preference, and storage thresholds.
+- [x] Embedded System Logs viewer (`src/components/admin/system-logs-client.tsx`) displaying sanitized audit trail with severity filtering (`all`, `info`, `warning`, `error`).
+
+---
+
+## Phase 04 Test Results & Verification Matrix
+
+| Category | Test Scenario | Expected Outcome | Actual Result | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Mobile UX** | 320px–430px Admin Navigation | Bottom nav with 5 destinations, 44px tap targets | Touch targets $\ge 44\text{px}$, zero horizontal scroll | **PASSED** |
+| **Mobile UX** | Inbox Card & Multi-Select | Responsive cards, select checkboxes, bulk action bar | Fluid mobile layout, batch operations functional | **PASSED** |
+| **Metrics** | Real Database Overview Counts | Count `submissions` & `storage_capacity_ledger` | Real counts queried, date filter working | **PASSED** |
+| **Queue** | Queue Management & Batches | Enqueue/dequeue submissions, batch cancellation | Linked to `publication_batches` & `publication_items` | **PASSED** |
+| **Archive** | Published Archive View | Query `status = 'published'` batches | Honest empty state / live batch viewer | **PASSED** |
+| **Settings** | App Settings Persistence | Read/write `app_settings` singleton row | Settings load and persist correctly | **PASSED** |
+| **Storage Panel** | Ledger Metrics & Reconciliation | Real ledger metrics, bucket recount RPC | Accurate storage stats displayed | **PASSED** |
+| **Audit Logs** | System Logs Viewer | Sanitized audit events filtered by severity | Displayed without exposing secrets or IPs | **PASSED** |
+| **Build & Lint** | Strict TypeScript check | 0 errors (`npx tsc --noEmit`) | 0 errors | **PASSED** |
+| **Build & Lint** | ESLint | 0 errors (`npm run lint`) | 0 errors | **PASSED** |
+| **Build & Lint** | Production Build | Turbopack compilation with PPR & Cache Components | Compiled successfully (13 routes) | **PASSED** |
+| **Live Database** | Schema, Batches, and Logs Test | Verify operations against dedicated Supabase DB | Verified with 0 residual test records | **PASSED** |

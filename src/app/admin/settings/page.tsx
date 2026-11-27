@@ -1,13 +1,14 @@
-import { getAppSettings, saveAppSettings } from "@/app/admin/actions";
+import { getAppSettings, saveAppSettings, getSystemLogs } from "@/app/admin/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Save, ShieldCheck, HardDrive, AlertCircle } from "lucide-react";
 import { InstagramIcon } from "@/components/ui/icons";
-
+import { SystemLogsClient } from "@/components/admin/system-logs-client";
 import { Suspense } from "react";
 
 async function SettingsContent() {
   const settings = await getAppSettings();
+  const logsData = await getSystemLogs("all", 50);
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -203,6 +204,9 @@ async function SettingsContent() {
           </Button>
         </div>
       </form>
+
+      {/* Embedded System Audit Logs */}
+      <SystemLogsClient initialLogs={logsData.logs} />
     </div>
   );
 }

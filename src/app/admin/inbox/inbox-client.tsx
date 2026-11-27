@@ -6,8 +6,8 @@ import { SubmissionStatus } from "@/lib/supabase/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { Search, Filter, Check, X, Clock, AlertTriangle, Eye, HelpCircle } from "lucide-react";
-import { moderateSubmission, getAdminMediaSignedUrl } from "@/app/admin/actions";
+import { Search, Filter, Check, X, Clock, AlertTriangle, Eye, HelpCircle, CheckSquare, Square } from "lucide-react";
+import { moderateSubmission, bulkModerateSubmissions, getAdminMediaSignedUrl } from "@/app/admin/actions";
 
 interface AdminSubmissionItem {
   id: string;
@@ -41,6 +41,7 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
   const [confirmRejectId, setConfirmRejectId] = React.useState<string | null>(null);
   const [activeMediaSignedUrl, setActiveMediaSignedUrl] = React.useState<string | null>(null);
   const [loadingMedia, setLoadingMedia] = React.useState(false);
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
   // Trigger signed preview fetch when an item is selected
   const handleSelectSubmission = (item: AdminSubmissionItem) => {
@@ -108,6 +109,46 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
     setModerationReason("");
   };
 
+  const handleBulkModerate = async (newStatus: SubmissionStatus) => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    setIsSubmitting(true);
+    const result = await bulkModerateSubmissions(ids, newStatus);
+    if (!result.success && result.error) {
+      alert(result.error);
+      setIsSubmitting(false);
+      return;
+    }
+
+    setSubmissions((prev) =>
+      prev.map((item) =>
+        selectedIds.has(item.id) ? { ...item, status: newStatus } : item
+      )
+    );
+    setSelectedIds(new Set());
+    setIsSubmitting(false);
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredSubmissions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredSubmissions.map((s) => s.id)));
+    }
+  };
+
   const getStatusBadge = (status: SubmissionStatus) => {
     const styles = {
       queued: "bg-[#EFF6FF] text-[#1D4ED8]",
@@ -172,23 +213,77 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
         </div>
 
         {/* Status Filters Pills - Horizontal scroll with 44px tap height */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
-          {(["all", "pending", "needs_review", "approved", "queued", "published", "rejected"] as const).map(
-            (tab) => (
-              <button
-                key={tab}
-                onClick={() => setStatusFilter(tab)}
-                className={`min-h-[38px] sm:min-h-[32px] px-3 py-1.5 text-xs rounded-lg font-medium capitalize transition-colors whitespace-nowrap cursor-pointer touch-manipulation ${
-                  statusFilter === tab
-                    ? "bg-[#2563EB] text-[#FFFFFF]"
-                    : "bg-[#FAFAFA] text-[#737373] hover:text-[#171717] border border-[#E5E7EB]"
-                }`}
-              >
-                {tab.replace("_", " ")}
-              </button>
-            )
+        <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1.5 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
+          <div className="flex items-center gap-1.5">
+            {(["all", "pending", "needs_review", "approved", "queued", "published", "rejected"] as const).map(
+              (tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setStatusFilter(tab)}
+                  className={`min-h-[38px] sm:min-h-[32px] px-3 py-1.5 text-xs rounded-lg font-medium capitalize transition-colors whitespace-nowrap cursor-pointer touch-manipulation ${
+                    statusFilter === tab
+                      ? "bg-[#2563EB] text-[#FFFFFF]"
+                      : "bg-[#FAFAFA] text-[#737373] hover:text-[#171717] border border-[#E5E7EB]"
+                  }`}
+                >
+                  {tab.replace("_", " ")}
+                </button>
+              )
+            )}
+          </div>
+
+          {filteredSubmissions.length > 0 && (
+            <button
+              onClick={toggleSelectAll}
+              className="text-xs text-[#737373] hover:text-[#171717] flex items-center gap-1.5 shrink-0 px-2.5 py-1.5 rounded-lg border border-[#E5E7EB] bg-[#FFFFFF] min-h-[38px] sm:min-h-[32px] cursor-pointer"
+            >
+              {selectedIds.size > 0 && selectedIds.size === filteredSubmissions.length ? (
+                <CheckSquare className="w-4 h-4 text-[#2563EB]" />
+              ) : (
+                <Square className="w-4 h-4 text-[#737373]" />
+              )}
+              <span>{selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select All"}</span>
+            </button>
           )}
         </div>
+
+        {/* Bulk Actions Banner */}
+        {selectedIds.size > 0 && (
+          <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-medium text-[#1E40AF]">
+              {selectedIds.size} message{selectedIds.size > 1 ? "s" : ""} selected
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => handleBulkModerate("approved")}
+                disabled={isSubmitting}
+                className="px-3 py-1.5 bg-[#16A34A] text-white rounded-lg text-xs font-medium hover:bg-[#15803D] disabled:opacity-50"
+              >
+                Approve All
+              </button>
+              <button
+                onClick={() => handleBulkModerate("queued")}
+                disabled={isSubmitting}
+                className="px-3 py-1.5 bg-[#2563EB] text-white rounded-lg text-xs font-medium hover:bg-[#1D4ED8] disabled:opacity-50"
+              >
+                Queue All
+              </button>
+              <button
+                onClick={() => handleBulkModerate("rejected")}
+                disabled={isSubmitting}
+                className="px-3 py-1.5 bg-[#DC2626] text-white rounded-lg text-xs font-medium hover:bg-[#B91C1C] disabled:opacity-50"
+              >
+                Reject All
+              </button>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="px-2.5 py-1.5 text-xs text-[#737373] hover:text-[#171717]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Empty State */}
@@ -211,13 +306,27 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
             {filteredSubmissions.map((sub) => (
               <div
                 key={sub.id}
-                className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-4 space-y-3"
+                className={`bg-[#FFFFFF] border rounded-xl p-4 space-y-3 transition-colors ${
+                  selectedIds.has(sub.id) ? "border-[#2563EB] ring-1 ring-[#2563EB]" : "border-[#E5E7EB]"
+                }`}
               >
                 {/* Card Top: Code + Status + Date */}
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-mono text-[11px] font-semibold text-[#171717]">
-                    {sub.id}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => toggleSelect(sub.id)}
+                      className="p-1 -m-1 text-[#737373] hover:text-[#171717] cursor-pointer"
+                    >
+                      {selectedIds.has(sub.id) ? (
+                        <CheckSquare className="w-4 h-4 text-[#2563EB]" />
+                      ) : (
+                        <Square className="w-4 h-4 text-[#A3A3A3]" />
+                      )}
+                    </button>
+                    <span className="font-mono text-[11px] font-semibold text-[#171717]">
+                      {sub.id}
+                    </span>
+                  </div>
                   <div className="flex items-center gap-2">
                     {getStatusBadge(sub.status)}
                     <span className="text-[11px] text-[#737373]">
@@ -303,6 +412,18 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-[#FAFAFA] border-b border-[#E5E7EB] text-[#737373] font-medium">
+                    <th className="py-2.5 px-3 w-10 text-center">
+                      <button
+                        onClick={toggleSelectAll}
+                        className="cursor-pointer text-[#737373] hover:text-[#171717]"
+                      >
+                        {selectedIds.size > 0 && selectedIds.size === filteredSubmissions.length ? (
+                          <CheckSquare className="w-4 h-4 text-[#2563EB]" />
+                        ) : (
+                          <Square className="w-4 h-4 text-[#A3A3A3]" />
+                        )}
+                      </button>
+                    </th>
                     <th className="py-2.5 px-4 w-28">Ref Code</th>
                     <th className="py-2.5 px-4 w-32">Status</th>
                     <th className="py-2.5 px-4 w-40">To</th>
@@ -313,7 +434,24 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
                 </thead>
                 <tbody className="divide-y divide-[#E5E7EB]">
                   {filteredSubmissions.map((sub) => (
-                    <tr key={sub.id} className="hover:bg-[#FAFAFA] transition-colors">
+                    <tr
+                      key={sub.id}
+                      className={`hover:bg-[#FAFAFA] transition-colors ${
+                        selectedIds.has(sub.id) ? "bg-[#F8FAFC]" : ""
+                      }`}
+                    >
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          onClick={() => toggleSelect(sub.id)}
+                          className="cursor-pointer text-[#737373] hover:text-[#171717]"
+                        >
+                          {selectedIds.has(sub.id) ? (
+                            <CheckSquare className="w-4 h-4 text-[#2563EB]" />
+                          ) : (
+                            <Square className="w-4 h-4 text-[#A3A3A3]" />
+                          )}
+                        </button>
+                      </td>
                       <td className="py-3 px-4 font-mono text-[11px] text-[#737373]">
                         {sub.id}
                       </td>
