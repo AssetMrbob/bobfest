@@ -9,6 +9,7 @@ import {
   createThreadsContainer,
   publishThreadsContainer,
 } from "@/lib/threads/threads-service";
+
 // Helper to generate signed download URL for Meta server ingestion
 async function getSignedMediaUrl(bucket: string, path: string, expiresInSec: number = 3600): Promise<string | null> {
   const adminClient = createAdminSupabaseClient();
@@ -20,7 +21,7 @@ async function getSignedMediaUrl(bucket: string, path: string, expiresInSec: num
 export interface DeliveryResult {
   platform: "instagram" | "threads";
   publicationType: "feed" | "story" | "threads_main" | "threads_reply";
-  status: "published" | "failed" | "skipped";
+  status: "published" | "failed" | "skipped" | "processing" | "unknown_outcome";
   mediaId?: string;
   permalink?: string;
   error?: string;
@@ -41,7 +42,9 @@ export interface PlatformPublishingReport {
  * 2. Instagram: Feed MUST succeed before Story is attempted.
  * 3. Threads: Slide 1 (main) MUST succeed before Slide 2 (continuation reply) is attempted.
  * 4. Strictly 1 Menfess = 1 Instagram publication (never mix submissions).
- * 5. Dry-run safety: Can generate payloads and verify without posting live.
+ * 5. Threads continuation retry without duplicating root post.
+ * 6. Atomic job claims via platform_deliveries.
+ * 7. Fail closed if durable database persistence is unavailable in production.
  */
 export async function executeMultiPlatformPublishing(params: {
   batchId: string;
@@ -83,12 +86,13 @@ export async function executeMultiPlatformPublishing(params: {
     throw new Error(`Submission not found for batch ${params.batchId}`);
   }
 
-  // Fetch ordered slides
+  // Fetch ordered slides (strictly maximum 2 slides per submission)
   const { data: slides } = await adminClient
     .from("submission_slides")
     .select("*")
     .eq("submission_id", submission.id)
-    .order("slide_order", { ascending: true });
+    .order("slide_order", { ascending: true })
+    .limit(2);
 
   const slideList: Array<{ slide_order: number; message: string }> =
     slides && slides.length > 0
@@ -107,10 +111,34 @@ export async function executeMultiPlatformPublishing(params: {
   const threadsEnabled = settings?.threads_enabled !== false;
   const threadsReplyEnabled = settings?.threads_reply_enabled !== false;
 
+  // Check existing deliveries for this batch to ensure atomic claims & resume capability
+  const { data: existingDeliveries } = await adminClient
+    .from("platform_deliveries")
+    .select("*")
+    .eq("batch_id", batch.id);
+
+  type DeliveryRow = NonNullable<typeof existingDeliveries>[number];
+  const deliveryMap = new Map<string, DeliveryRow>();
+  if (existingDeliveries) {
+    for (const d of existingDeliveries) {
+      deliveryMap.set(`${d.platform}:${d.publication_type}`, d);
+    }
+  }
+
   // 3. Instagram Publication Pipeline
   let igFeedSuccess = false;
+  const existingFeed = deliveryMap.get("instagram:feed");
 
-  if (igFeedEnabled && batch.feed_asset_paths && batch.feed_asset_paths.length > 0) {
+  if (existingFeed && existingFeed.status === "published") {
+    igFeedSuccess = true;
+    deliveries.push({
+      platform: "instagram",
+      publicationType: "feed",
+      status: "published",
+      mediaId: existingFeed.published_media_id || undefined,
+      permalink: existingFeed.permalink || undefined,
+    });
+  } else if (igFeedEnabled && batch.feed_asset_paths && batch.feed_asset_paths.length > 0) {
     if (params.dryRun) {
       deliveries.push({
         platform: "instagram",
@@ -121,8 +149,18 @@ export async function executeMultiPlatformPublishing(params: {
       });
       igFeedSuccess = true;
     } else {
+      // Atomic claim
+      await adminClient.from("platform_deliveries").upsert({
+        batch_id: batch.id,
+        submission_id: submission.id,
+        platform: "instagram",
+        publication_type: "feed",
+        status: "processing",
+        scheduled_time: new Date().toISOString(),
+        last_attempt_at: new Date().toISOString(),
+      }, { onConflict: "batch_id,platform,publication_type" });
+
       try {
-        // Generate signed URLs (1 hour validity for Meta fetching)
         const signedUrls: string[] = [];
         for (const path of batch.feed_asset_paths) {
           const sUrl = await getSignedMediaUrl("bobfess-published", path, 3600);
@@ -157,7 +195,6 @@ export async function executeMultiPlatformPublishing(params: {
         });
         igFeedSuccess = true;
 
-        // Update batch permalink and status
         await adminClient.from("publication_batches").update({
           carousel_container_id: containerRes.containerId,
           permalink: pubRes.permalink || null,
@@ -165,19 +202,40 @@ export async function executeMultiPlatformPublishing(params: {
           published_at: new Date().toISOString(),
         }).eq("id", batch.id);
 
+        await adminClient.from("platform_deliveries").update({
+          status: "published",
+          published_media_id: pubRes.publishedMediaId,
+          permalink: pubRes.permalink || null,
+          published_at: new Date().toISOString(),
+        }).match({ batch_id: batch.id, platform: "instagram", publication_type: "feed" });
+
       } catch (err) {
+        const errMsg = (err as Error).message;
         deliveries.push({
           platform: "instagram",
           publicationType: "feed",
           status: "failed",
-          error: (err as Error).message,
+          error: errMsg,
         });
+
+        await adminClient.from("platform_deliveries").update({
+          status: "failed",
+          sanitized_error_message: errMsg,
+        }).match({ batch_id: batch.id, platform: "instagram", publication_type: "feed" });
       }
     }
   }
 
   // Instagram Story (Only after Feed succeeds)
-  if (igStoryEnabled && batch.story_asset_path) {
+  const existingStory = deliveryMap.get("instagram:story");
+  if (existingStory && existingStory.status === "published") {
+    deliveries.push({
+      platform: "instagram",
+      publicationType: "story",
+      status: "published",
+      mediaId: existingStory.published_media_id || undefined,
+    });
+  } else if (igStoryEnabled && batch.story_asset_path) {
     if (!igFeedSuccess && !params.dryRun) {
       deliveries.push({
         platform: "instagram",
@@ -193,6 +251,16 @@ export async function executeMultiPlatformPublishing(params: {
         mediaId: "dry_run_story_id",
       });
     } else {
+      await adminClient.from("platform_deliveries").upsert({
+        batch_id: batch.id,
+        submission_id: submission.id,
+        platform: "instagram",
+        publication_type: "story",
+        status: "processing",
+        scheduled_time: new Date().toISOString(),
+        last_attempt_at: new Date().toISOString(),
+      }, { onConflict: "batch_id,platform,publication_type" });
+
       try {
         const storyUrl = await getSignedMediaUrl("bobfess-published", batch.story_asset_path, 3600);
         if (!storyUrl) throw new Error(`Failed to generate signed URL for Story: ${batch.story_asset_path}`);
@@ -218,30 +286,51 @@ export async function executeMultiPlatformPublishing(params: {
           story_container_id: storyContainer.containerId,
         }).eq("id", batch.id);
 
+        await adminClient.from("platform_deliveries").update({
+          status: "published",
+          published_media_id: storyPub.publishedMediaId,
+          published_at: new Date().toISOString(),
+        }).match({ batch_id: batch.id, platform: "instagram", publication_type: "story" });
+
       } catch (err) {
+        const errMsg = (err as Error).message;
         deliveries.push({
           platform: "instagram",
           publicationType: "story",
           status: "failed",
-          error: (err as Error).message,
+          error: errMsg,
         });
+
+        await adminClient.from("platform_deliveries").update({
+          status: "failed",
+          sanitized_error_message: errMsg,
+        }).match({ batch_id: batch.id, platform: "instagram", publication_type: "story" });
       }
     }
   }
 
   // 4. Threads Publication Pipeline
   let threadsRootId: string | undefined;
+  const existingThreadsMain = deliveryMap.get("threads:threads_main");
 
-  if (threadsEnabled && slideList.length > 0) {
+  if (existingThreadsMain && existingThreadsMain.status === "published") {
+    threadsRootId = existingThreadsMain.published_media_id || undefined;
+    deliveries.push({
+      platform: "threads",
+      publicationType: "threads_main",
+      status: "published",
+      mediaId: threadsRootId,
+      permalink: existingThreadsMain.permalink || undefined,
+    });
+  } else if (threadsEnabled && slideList.length > 0) {
     const slide1Text = slideList[0].message;
     const refTag = settings?.threads_show_ref_code ? `\n\n#${submission.public_code}` : "";
     const prefix = settings?.threads_prefix ? `${settings.threads_prefix}\n\n` : "";
     const suffix = settings?.threads_suffix ? `\n\n${settings.threads_suffix}` : "";
 
-    // Fit text within Threads 500-char limit
+    // Fit text strictly within Threads 500-char limit
     let rootText = `${prefix}${slide1Text}${refTag}${suffix}`;
     if (rootText.length > 500) {
-      // Prioritize raw approved text
       rootText = slide1Text.slice(0, 500);
     }
 
@@ -255,6 +344,16 @@ export async function executeMultiPlatformPublishing(params: {
       });
       threadsRootId = "dry_run_threads_root_id";
     } else {
+      await adminClient.from("platform_deliveries").upsert({
+        batch_id: batch.id,
+        submission_id: submission.id,
+        platform: "threads",
+        publication_type: "threads_main",
+        status: "processing",
+        scheduled_time: new Date().toISOString(),
+        last_attempt_at: new Date().toISOString(),
+      }, { onConflict: "batch_id,platform,publication_type" });
+
       try {
         const containerRes = await createThreadsContainer({ text: rootText });
         if (containerRes.error || !containerRes.containerId) {
@@ -274,86 +373,113 @@ export async function executeMultiPlatformPublishing(params: {
           mediaId: threadsRootId,
           permalink: pubRes.permalink,
         });
+
+        await adminClient.from("platform_deliveries").update({
+          status: "published",
+          published_media_id: threadsRootId,
+          permalink: pubRes.permalink || null,
+          published_at: new Date().toISOString(),
+        }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_main" });
+
       } catch (err) {
+        const errMsg = (err as Error).message;
         deliveries.push({
           platform: "threads",
           publicationType: "threads_main",
           status: "failed",
-          error: (err as Error).message,
+          error: errMsg,
         });
-      }
-    }
 
-    // Threads Continuation (Slide 2 reply)
-    if (threadsReplyEnabled && slideList.length > 1) {
-      if (!threadsRootId) {
-        deliveries.push({
-          platform: "threads",
-          publicationType: "threads_reply",
-          status: "skipped",
-          error: "Continuation reply skipped because main post failed.",
-        });
-      } else if (params.dryRun) {
-        deliveries.push({
-          platform: "threads",
-          publicationType: "threads_reply",
-          status: "published",
-          mediaId: "dry_run_threads_reply_id",
-          permalink: "https://threads.net/@kampunginggrisfess/post/dry_run_reply",
-        });
-      } else {
-        try {
-          const slide2Text = slideList[1].message.slice(0, 500);
-          const replyContainer = await createThreadsContainer({
-            text: slide2Text,
-            replyToId: threadsRootId,
-          });
-
-          if (replyContainer.error || !replyContainer.containerId) {
-            throw new Error(replyContainer.error || "Failed to create Threads reply container");
-          }
-
-          const replyPub = await publishThreadsContainer(replyContainer.containerId);
-          if (replyPub.error || !replyPub.publishedMediaId) {
-            throw new Error(replyPub.error || "Failed to publish Threads reply");
-          }
-
-          deliveries.push({
-            platform: "threads",
-            publicationType: "threads_reply",
-            status: "published",
-            mediaId: replyPub.publishedMediaId,
-            permalink: replyPub.permalink,
-          });
-        } catch (err) {
-          deliveries.push({
-            platform: "threads",
-            publicationType: "threads_reply",
-            status: "failed",
-            error: (err as Error).message,
-          });
-        }
+        await adminClient.from("platform_deliveries").update({
+          status: "failed",
+          sanitized_error_message: errMsg,
+        }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_main" });
       }
     }
   }
 
-  // Record platform_deliveries if table exists
-  for (const d of deliveries) {
-    try {
+  // Threads Continuation (Slide 2 reply) - Can retry without duplicating root post
+  const existingThreadsReply = deliveryMap.get("threads:threads_reply");
+  if (existingThreadsReply && existingThreadsReply.status === "published") {
+    deliveries.push({
+      platform: "threads",
+      publicationType: "threads_reply",
+      status: "published",
+      mediaId: existingThreadsReply.published_media_id || undefined,
+      permalink: existingThreadsReply.permalink || undefined,
+    });
+  } else if (threadsReplyEnabled && slideList.length > 1) {
+    if (!threadsRootId) {
+      deliveries.push({
+        platform: "threads",
+        publicationType: "threads_reply",
+        status: "skipped",
+        error: "Continuation reply skipped because main post is not yet published.",
+      });
+    } else if (params.dryRun) {
+      deliveries.push({
+        platform: "threads",
+        publicationType: "threads_reply",
+        status: "published",
+        mediaId: "dry_run_threads_reply_id",
+        permalink: "https://threads.net/@kampunginggrisfess/post/dry_run_reply",
+      });
+    } else {
       await adminClient.from("platform_deliveries").upsert({
         batch_id: batch.id,
         submission_id: submission.id,
-        platform: d.platform,
-        publication_type: d.publicationType,
-        status: d.status,
+        platform: "threads",
+        publication_type: "threads_reply",
+        status: "processing",
         scheduled_time: new Date().toISOString(),
-        published_media_id: d.mediaId || null,
-        permalink: d.permalink || null,
-        sanitized_error_message: d.error || null,
-        published_at: d.status === "published" ? new Date().toISOString() : null,
+        last_attempt_at: new Date().toISOString(),
       }, { onConflict: "batch_id,platform,publication_type" });
-    } catch {
-      // Non-fatal if platform_deliveries migration has not yet been applied
+
+      try {
+        const slide2Text = slideList[1].message.slice(0, 500);
+        const replyContainer = await createThreadsContainer({
+          text: slide2Text,
+          replyToId: threadsRootId,
+        });
+
+        if (replyContainer.error || !replyContainer.containerId) {
+          throw new Error(replyContainer.error || "Failed to create Threads reply container");
+        }
+
+        const replyPub = await publishThreadsContainer(replyContainer.containerId);
+        if (replyPub.error || !replyPub.publishedMediaId) {
+          throw new Error(replyPub.error || "Failed to publish Threads reply");
+        }
+
+        deliveries.push({
+          platform: "threads",
+          publicationType: "threads_reply",
+          status: "published",
+          mediaId: replyPub.publishedMediaId,
+          permalink: replyPub.permalink,
+        });
+
+        await adminClient.from("platform_deliveries").update({
+          status: "published",
+          published_media_id: replyPub.publishedMediaId,
+          permalink: replyPub.permalink || null,
+          published_at: new Date().toISOString(),
+        }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_reply" });
+
+      } catch (err) {
+        const errMsg = (err as Error).message;
+        deliveries.push({
+          platform: "threads",
+          publicationType: "threads_reply",
+          status: "failed",
+          error: errMsg,
+        });
+
+        await adminClient.from("platform_deliveries").update({
+          status: "failed",
+          sanitized_error_message: errMsg,
+        }).match({ batch_id: batch.id, platform: "threads", publication_type: "threads_reply" });
+      }
     }
   }
 

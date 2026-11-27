@@ -20,12 +20,41 @@ export interface ThreadsAccountInfo {
   username: string;
   name: string;
   profilePictureUrl?: string;
-  status: "connected" | "error" | "mismatch";
+  status: "connected" | "error" | "mismatch" | "username_changed";
   error?: string;
+  detectedUsername?: string;
+}
+
+/**
+ * Synchronizes the verified Threads username when account ID matches but username changed.
+ */
+export async function syncThreadsUsername(newUsername: string): Promise<boolean> {
+  const credentials = await getActivePlatformToken("threads");
+  if (!credentials) return false;
+
+  return await savePlatformToken({
+    id: "threads_official",
+    platform: "threads",
+    accountId: credentials.accountId,
+    accountUsername: newUsername,
+    token: credentials.token,
+    status: "connected",
+    metadata: { synced_at: new Date().toISOString(), previous_username: credentials.username },
+  });
 }
 
 /**
  * Verifies Threads account identity with fail-closed security.
+ *
+ * Rules:
+ * 1. Account ID is the primary publishing identity.
+ * 2. If Account ID matches but Username changed on Threads:
+ *    - Detect username change.
+ *    - Return status "username_changed" with detectedUsername.
+ *    - Allow administrator to synchronize profile.
+ *    - Publishing is NOT blocked solely because of a username rename on an authorized account.
+ * 3. If Account ID differs:
+ *    - Fail closed immediately (status: "mismatch").
  */
 export async function verifyThreadsConnection(): Promise<ThreadsAccountInfo> {
   const credentials = await getActivePlatformToken("threads");
@@ -56,13 +85,27 @@ export async function verifyThreadsConnection(): Promise<ThreadsAccountInfo> {
       };
     }
 
-    if (data.id !== expectedId || data.username.toLowerCase() !== expectedUsername.toLowerCase()) {
+    if (data.id !== expectedId) {
       return {
         id: data.id,
         username: data.username,
         name: data.name || "",
         status: "mismatch",
-        error: `Security alert: Threads account (${data.username}:${data.id}) does not match expected (${expectedUsername}:${expectedId}). Publishing blocked.`,
+        error: `Security alert: Threads account ID (${data.id}) does not match expected (${expectedId}). Publishing blocked.`,
+      };
+    }
+
+    const isUsernameChanged = data.username && data.username.toLowerCase() !== expectedUsername.toLowerCase();
+
+    if (isUsernameChanged) {
+      return {
+        id: data.id,
+        username: expectedUsername,
+        name: data.name || "",
+        profilePictureUrl: data.threads_profile_picture_url,
+        status: "username_changed",
+        detectedUsername: data.username,
+        error: `Notice: Threads username changed on platform from '@${expectedUsername}' to '@${data.username}'. Account ID verified. Profile sync available.`,
       };
     }
 
@@ -84,44 +127,58 @@ export async function verifyThreadsConnection(): Promise<ThreadsAccountInfo> {
   }
 }
 
+// In-memory mutex to prevent concurrent refresh storms
+let threadsRefreshPromise: Promise<{ success: boolean; error?: string; expiresIn?: number }> | null = null;
+
 /**
  * Refreshes a long-lived Threads access token.
- * Minimum token age for refresh is usually 24 hours. Valid for 60 days.
+ * Minimum token age for refresh is 24 hours. Valid for 60 days.
+ * Protected against concurrent refresh calls.
  */
 export async function refreshThreadsToken(): Promise<{ success: boolean; error?: string; expiresIn?: number }> {
-  const credentials = await getActivePlatformToken("threads");
-  if (!credentials) return { success: false, error: "Threads token not found." };
-
-  const url = `${THREADS_API_HOST}/refresh_access_token?grant_type=th_refresh_token&access_token=${encodeURIComponent(credentials.token)}`;
-
-  try {
-    const res = await fetch(url, { method: "GET" });
-    const data = await res.json();
-
-    if (!res.ok || data.error || !data.access_token) {
-      return { success: false, error: data.error?.message || "Failed to refresh Threads token" };
-    }
-
-    const newAccessToken = data.access_token;
-    const expiresIn = data.expires_in; // seconds (typically 5184000 = 60 days)
-    const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null;
-
-    // Persist new token in secure store
-    await savePlatformToken({
-      id: "threads_official",
-      platform: "threads",
-      accountId: credentials.accountId,
-      accountUsername: credentials.username,
-      token: newAccessToken,
-      expiresAt,
-      status: "connected",
-      metadata: { last_refreshed: new Date().toISOString(), expires_in_seconds: expiresIn },
-    });
-
-    return { success: true, expiresIn };
-  } catch (err) {
-    return { success: false, error: (err as Error).message };
+  if (threadsRefreshPromise) {
+    return threadsRefreshPromise;
   }
+
+  threadsRefreshPromise = (async () => {
+    try {
+      const credentials = await getActivePlatformToken("threads");
+      if (!credentials) return { success: false, error: "Threads token not found." };
+
+      const url = `${THREADS_API_HOST}/refresh_access_token?grant_type=th_refresh_token&access_token=${encodeURIComponent(credentials.token)}`;
+
+      const res = await fetch(url, { method: "GET" });
+      const data = await res.json();
+
+      if (!res.ok || data.error || !data.access_token) {
+        return { success: false, error: data.error?.message || "Failed to refresh Threads token" };
+      }
+
+      const newAccessToken = data.access_token;
+      const expiresIn = data.expires_in; // seconds (typically 5184000 = 60 days)
+      const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null;
+
+      // Persist new token in secure store
+      await savePlatformToken({
+        id: "threads_official",
+        platform: "threads",
+        accountId: credentials.accountId,
+        accountUsername: credentials.username,
+        token: newAccessToken,
+        expiresAt,
+        status: "connected",
+        metadata: { last_refreshed: new Date().toISOString(), expires_in_seconds: expiresIn },
+      });
+
+      return { success: true, expiresIn };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    } finally {
+      threadsRefreshPromise = null;
+    }
+  })();
+
+  return threadsRefreshPromise;
 }
 
 /**

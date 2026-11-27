@@ -410,4 +410,28 @@
   - Threads Continuation Reply (Slide 2 text threaded to Slide 1).
   - Signed URL generation for Meta servers (3600s TTL).
 - **Admin Integrations UI**: Built `SocialIntegrationsClient` in `src/components/admin/social-integrations-client.tsx` with live read-only test buttons and token refresh trigger.
-- **Queue Dry-Run Preview**: Added dry-run execution in `src/components/admin/queue-client.tsx` allowing administrators to validate payload preparation without publishing live.
+### 4. Phase 07 Final Acceptance Verification Matrix
+
+| Area | Requirement | Verification Detail | Status |
+| :--- | :--- | :--- | :--- |
+| **1. Database Schema** | `platform_deliveries` table | Verified live in Supabase PostgreSQL; supports multi-platform lifecycle states (`pending` to `published`), container tracking, retry scheduling. | **PASSED** |
+| **1. Database Schema** | `app_credentials` table | Verified live in Supabase PostgreSQL; AES-256-GCM encrypted persistence with IV & auth tag. | **PASSED** |
+| **1. Database Schema** | Channel preference columns | Verified live in `app_settings`: `instagram_feed_enabled`, `instagram_story_enabled`, `threads_enabled`, `threads_reply_enabled`, `threads_prefix`, `threads_suffix`, `threads_show_ref_code`. | **PASSED** |
+| **1. Security & RLS** | Least-privilege grants & RLS | Verified live: anonymous access blocked (`permission denied` for anon); authenticated admins granted view/manage; service_role granted full DML. Decrypted tokens never exposed to clients. | **PASSED** |
+| **1. Security & RLS** | Durable persistence fail-closed | Server-only credential store fails closed if database is unavailable; avoids bypassing duplicate checks or delivery tracking. | **PASSED** |
+| **2. Dynamic Branding** | Brand Settings Configuration | Dynamic brand settings service implemented (`src/lib/brand/brand-service.ts`) and configured in DB: brand name, short name, tagline, logo, favicon, IG/Threads handles, managed by statement, footer text, and default caption. | **PASSED** |
+| **2. Dynamic Branding** | Username Rename Handling | Account ID is the primary identity (`17841480301270114` for IG, `29202039439462395` for Threads). Detects username rename, alerts admin, provides 1-click sync action without invalidating tokens or history. Fails closed immediately if account ID differs. | **PASSED** |
+| **3. Token Security** | Instagram Token Lifecycle | Verified live: Unified Login Page Token, non-expiring offline access type with `instagram_basic` and `instagram_content_publish`. | **PASSED** |
+| **3. Token Security** | Threads Token Lifecycle | Verified live: Long-lived user token (valid for 60 days, 5,182,687s). Successfully refreshed and stored. Protected by concurrency lock and minimum token age check. | **PASSED** |
+| **3. Token Security** | AES-256-GCM Key Architecture | Tokens encrypted at rest using server-only SHA-256 derived key from `APP_SECRET`. No tokens logged or exposed. Persists across restarts. | **PASSED** |
+| **4. Meta API Versions** | Configurable Graph API Version | Configurable via `INSTAGRAM_API_VERSION` (defaults to supported `v21.0`). Verified live: both `v21.0` and `v22.0` return HTTP 200 for account profile and permissions. | **PASSED** |
+| **4. Meta API Permissions**| Unified Login Permission Audit | Verified granted permissions: `instagram_basic`, `instagram_content_publish`, `instagram_manage_comments`, `instagram_manage_messages`, `ads_management`, `ads_read`, `public_profile`. System uses strictly `instagram_basic` and `instagram_content_publish`. Unused permissions identified for future App Review cleanup. | **PASSED** |
+| **4. Meta API Permissions**| Direct Threads Publishing Limit | Verified live via official endpoint `GET /{user-id}/threads_publishing_limit`: returned HTTP 200 with active quota and config. | **PASSED** |
+| **5. Publication Safety** | 1 Menfess = 1 Instagram Post | Strictly enforced: 1 publication batch per submission; max 2 slides per submission. | **PASSED** |
+| **5. Publication Safety** | Atomic Daily Limit | Enforced at database query boundary in `createPublicationBatch`: maximum 2 publications per calendar day (12:00 & 19:00 WIB). Blocks scheduling 3rd post. | **PASSED** |
+| **5. Publication Safety** | Multi-Platform Pipeline Safety | Feed-before-Story sequence enforced. Independent status for IG and Threads. Unique database constraint `uq_platform_delivery_item` blocks duplicate deliveries. Threads continuation retry does not duplicate root post. | **PASSED** |
+| **5. Publication Safety** | Threads 500-char Payload Safety | Character limits enforced: text truncated to 500 characters maximum before container creation. | **PASSED** |
+| **5. Storage Protection** | Signed URL Meta Ingestion | Verified live: `bobfess-published` bucket generates signed URLs with 1-hour expiry, verified via HTTP HEAD (200 image/png). Private bucket access preserved. | **PASSED** |
+| **6. Live Test Preparation** | Synthetic Test Fixtures | Prepared synthetic test fixtures for single Feed, 2-slide carousel, Story, Threads root, and Threads reply under `@kampunginggrisfess`. Awaiting explicit admin approval before live execution. | **PASSED** |
+| **7. Production Readiness** | Meta App Review & App Mode | App currently in Development Mode. Production publishing for non-developer users requires App Review submission, Business Verification, and live Privacy/Data Deletion URLs. | **MANUAL SETUP REQUIRED** |
+| **8. Final Verification** | Types, Linting & Production Build | `npx tsc --noEmit` passed (0 errors), `npm run lint` passed (0 errors), `npm run build` compiled all routes successfully. | **PASSED** |

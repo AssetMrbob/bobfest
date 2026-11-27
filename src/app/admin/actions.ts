@@ -770,10 +770,45 @@ export async function createPublicationBatch(scheduledTime: string, submissionId
 
   const adminClient = createAdminSupabaseClient();
 
+  // 1. Strict duplicate submission check: Ensure this submission is not already scheduled/published
+  const { data: existingItem } = await adminClient
+    .from("publication_items")
+    .select("batch_id, publication_batches(status)")
+    .eq("submission_id", submissionId)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingItem) {
+    return { error: "This submission is already assigned to a publication batch." };
+  }
+
+  // 2. Atomic Daily Limit Enforcement: Maximum 2 publications per day
+  const targetDate = new Date(scheduledTime);
+  const dayStart = new Date(targetDate);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(targetDate);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const { count: dailyCount, error: countErr } = await adminClient
+    .from("publication_batches")
+    .select("id", { count: "exact", head: true })
+    .gte("scheduled_time", dayStart.toISOString())
+    .lte("scheduled_time", dayEnd.toISOString())
+    .neq("status", "cancelled");
+
+  if (countErr) {
+    return { error: `Failed to check daily publication limit: ${countErr.message}` };
+  }
+
+  if (dailyCount !== null && dailyCount >= 2) {
+    return { error: "Daily publication limit reached (maximum 2 Menfess publications per day at 12:00 and 19:00 WIB)." };
+  }
+
   // Create batch linked 1:1 to submission
   const { data: batch, error: batchErr } = await adminClient
     .from("publication_batches")
     .insert({
+      submission_id: submissionId,
       scheduled_time: scheduledTime,
       status: "scheduled",
     })

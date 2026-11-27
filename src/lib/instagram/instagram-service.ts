@@ -1,9 +1,8 @@
-import { getActivePlatformToken } from "@/lib/security/credential-store";
+import { getActivePlatformToken, savePlatformToken } from "@/lib/security/credential-store";
 
 /**
  * Official Instagram Graph API Integration for Unified Login
  * Host: graph.facebook.com
- * API Version: v21.0
  * Supported operations:
  * - Read-only account verification & permission checking
  * - Single image container creation & publishing
@@ -11,7 +10,12 @@ import { getActivePlatformToken } from "@/lib/security/credential-store";
  * - Story container creation & publishing
  */
 
-export const INSTAGRAM_GRAPH_VERSION = "v21.0";
+export const DEFAULT_INSTAGRAM_GRAPH_VERSION = "v21.0";
+
+export function getInstagramGraphVersion(): string {
+  return process.env.INSTAGRAM_API_VERSION || process.env.NEXT_PUBLIC_INSTAGRAM_API_VERSION || DEFAULT_INSTAGRAM_GRAPH_VERSION;
+}
+
 export const INSTAGRAM_GRAPH_HOST = "https://graph.facebook.com";
 
 export interface InstagramAccountInfo {
@@ -19,8 +23,9 @@ export interface InstagramAccountInfo {
   username: string;
   name: string;
   permissions?: string[];
-  status: "connected" | "error" | "mismatch";
+  status: "connected" | "error" | "mismatch" | "username_changed";
   error?: string;
+  detectedUsername?: string;
 }
 
 export interface ContainerCreationResult {
@@ -33,7 +38,35 @@ export interface PublishResult {
 }
 
 /**
+ * Synchronizes the verified username when the account ID matches but username changed.
+ */
+export async function syncInstagramUsername(newUsername: string): Promise<boolean> {
+  const credentials = await getActivePlatformToken("instagram");
+  if (!credentials) return false;
+
+  return await savePlatformToken({
+    id: "instagram_unified",
+    platform: "instagram",
+    accountId: credentials.accountId,
+    accountUsername: newUsername,
+    token: credentials.token,
+    status: "connected",
+    metadata: { synced_at: new Date().toISOString(), previous_username: credentials.username },
+  });
+}
+
+/**
  * Verifies account identity and active permissions with fail-closed security.
+ *
+ * Rules:
+ * 1. Account ID is the primary publishing identity.
+ * 2. If Account ID matches but Username changed on Instagram:
+ *    - Detect username change.
+ *    - Return status "username_changed" with detectedUsername.
+ *    - Allow administrator to synchronize profile.
+ *    - Publishing is NOT blocked solely because of a username rename on an authorized account.
+ * 3. If Account ID differs:
+ *    - Fail closed immediately (status: "mismatch").
  */
 export async function verifyInstagramConnection(): Promise<InstagramAccountInfo> {
   const credentials = await getActivePlatformToken("instagram");
@@ -48,10 +81,11 @@ export async function verifyInstagramConnection(): Promise<InstagramAccountInfo>
   }
 
   const { token, accountId: expectedId, username: expectedUsername } = credentials;
+  const version = getInstagramGraphVersion();
 
   try {
     // 1. Fetch account profile
-    const profileUrl = `${INSTAGRAM_GRAPH_HOST}/${INSTAGRAM_GRAPH_VERSION}/${expectedId}?fields=id,username,name&access_token=${encodeURIComponent(token)}`;
+    const profileUrl = `${INSTAGRAM_GRAPH_HOST}/${version}/${expectedId}?fields=id,username,name&access_token=${encodeURIComponent(token)}`;
     const profileRes = await fetch(profileUrl, { method: "GET" });
     const profileData = await profileRes.json();
 
@@ -65,19 +99,22 @@ export async function verifyInstagramConnection(): Promise<InstagramAccountInfo>
       };
     }
 
-    // Fail closed if ID or username does not match
-    if (profileData.id !== expectedId || profileData.username.toLowerCase() !== expectedUsername.toLowerCase()) {
+    // Fail closed if Account ID does not match
+    if (profileData.id !== expectedId) {
       return {
         id: profileData.id,
         username: profileData.username,
         name: profileData.name || "",
         status: "mismatch",
-        error: `Security alert: Account returned (${profileData.username}:${profileData.id}) does not match expected (${expectedUsername}:${expectedId}). Publishing blocked.`,
+        error: `Security alert: Account ID returned (${profileData.id}) does not match expected (${expectedId}). Publishing blocked.`,
       };
     }
 
-    // 2. Fetch permissions
-    const permsUrl = `${INSTAGRAM_GRAPH_HOST}/${INSTAGRAM_GRAPH_VERSION}/me/permissions?access_token=${encodeURIComponent(token)}`;
+    // Detect username rename
+    const isUsernameChanged = profileData.username && profileData.username.toLowerCase() !== expectedUsername.toLowerCase();
+
+    // 2. Fetch permissions (only content publish and basic needed)
+    const permsUrl = `${INSTAGRAM_GRAPH_HOST}/${version}/me/permissions?access_token=${encodeURIComponent(token)}`;
     const permsRes = await fetch(permsUrl);
     const permsData = await permsRes.json();
     const grantedPerms: string[] = [];
@@ -97,6 +134,18 @@ export async function verifyInstagramConnection(): Promise<InstagramAccountInfo>
         permissions: grantedPerms,
         status: "error",
         error: "Missing required permission 'instagram_content_publish'.",
+      };
+    }
+
+    if (isUsernameChanged) {
+      return {
+        id: profileData.id,
+        username: expectedUsername,
+        name: profileData.name || "",
+        permissions: grantedPerms,
+        status: "username_changed",
+        detectedUsername: profileData.username,
+        error: `Notice: Instagram username changed on platform from '@${expectedUsername}' to '@${profileData.username}'. Account ID verified. Profile sync available.`,
       };
     }
 
@@ -127,7 +176,8 @@ export async function pollContainerStatus(
   maxWaitMs: number = 30000
 ): Promise<{ ready: boolean; error?: string }> {
   const start = Date.now();
-  const url = `${INSTAGRAM_GRAPH_HOST}/${INSTAGRAM_GRAPH_VERSION}/${containerId}?fields=status_code,status&access_token=${encodeURIComponent(token)}`;
+  const version = getInstagramGraphVersion();
+  const url = `${INSTAGRAM_GRAPH_HOST}/${version}/${containerId}?fields=status_code,status&access_token=${encodeURIComponent(token)}`;
 
   while (Date.now() - start < maxWaitMs) {
     try {
@@ -158,7 +208,8 @@ export async function createSingleImageFeedContainer(
   const credentials = await getActivePlatformToken("instagram");
   if (!credentials) return { error: "Instagram credentials not configured." };
 
-  const url = `${INSTAGRAM_GRAPH_HOST}/${INSTAGRAM_GRAPH_VERSION}/${credentials.accountId}/media`;
+  const version = getInstagramGraphVersion();
+  const url = `${INSTAGRAM_GRAPH_HOST}/${version}/${credentials.accountId}/media`;
   const body = new URLSearchParams({
     image_url: imageUrl,
     caption,
@@ -191,7 +242,8 @@ export async function createCarouselFeedContainer(
   const credentials = await getActivePlatformToken("instagram");
   if (!credentials) return { error: "Instagram credentials not configured." };
 
-  const url = `${INSTAGRAM_GRAPH_HOST}/${INSTAGRAM_GRAPH_VERSION}/${credentials.accountId}/media`;
+  const version = getInstagramGraphVersion();
+  const url = `${INSTAGRAM_GRAPH_HOST}/${version}/${credentials.accountId}/media`;
   const childContainerIds: string[] = [];
 
   // Create child items in order
@@ -254,7 +306,8 @@ export async function createStoryContainer(
   const credentials = await getActivePlatformToken("instagram");
   if (!credentials) return { error: "Instagram credentials not configured." };
 
-  const url = `${INSTAGRAM_GRAPH_HOST}/${INSTAGRAM_GRAPH_VERSION}/${credentials.accountId}/media`;
+  const version = getInstagramGraphVersion();
+  const url = `${INSTAGRAM_GRAPH_HOST}/${version}/${credentials.accountId}/media`;
   const body = new URLSearchParams({
     image_url: storyImageUrl,
     media_type: "STORIES",
@@ -293,7 +346,8 @@ export async function publishInstagramContainer(
   }
 
   // 2. Publish container
-  const url = `${INSTAGRAM_GRAPH_HOST}/${INSTAGRAM_GRAPH_VERSION}/${credentials.accountId}/media_publish`;
+  const version = getInstagramGraphVersion();
+  const url = `${INSTAGRAM_GRAPH_HOST}/${version}/${credentials.accountId}/media_publish`;
   const body = new URLSearchParams({
     creation_id: containerId,
     access_token: credentials.token,
@@ -315,7 +369,7 @@ export async function publishInstagramContainer(
     // 3. Attempt to fetch permalink
     let permalink: string | undefined;
     try {
-      const mediaUrl = `${INSTAGRAM_GRAPH_HOST}/${INSTAGRAM_GRAPH_VERSION}/${publishedMediaId}?fields=permalink&access_token=${encodeURIComponent(credentials.token)}`;
+      const mediaUrl = `${INSTAGRAM_GRAPH_HOST}/${version}/${publishedMediaId}?fields=permalink&access_token=${encodeURIComponent(credentials.token)}`;
       const mediaRes = await fetch(mediaUrl);
       const mediaData = await mediaRes.json();
       if (mediaData.permalink) {

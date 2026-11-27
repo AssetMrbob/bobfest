@@ -4,13 +4,26 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InstagramIcon } from "@/components/ui/icons";
-import { MessageSquare, CheckCircle2, AlertCircle, RefreshCw, Send, ShieldCheck } from "lucide-react";
+import {
+  MessageSquare,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  Send,
+  ShieldCheck,
+  Palette,
+} from "lucide-react";
 import {
   testInstagramConnectionAction,
+  syncInstagramUsernameAction,
   testThreadsConnectionAction,
+  syncThreadsUsernameAction,
   refreshThreadsTokenAction,
   updateSocialSettingsAction,
+  getBrandSettingsAction,
+  updateBrandSettingsAction,
 } from "@/app/admin/social-actions";
+import { BrandSettings } from "@/lib/brand/brand-service";
 
 interface SocialIntegrationsClientProps {
   initialSettings: {
@@ -27,9 +40,12 @@ interface SocialIntegrationsClientProps {
 
 export function SocialIntegrationsClient({ initialSettings }: SocialIntegrationsClientProps) {
   const [isTestingIg, setIsTestingIg] = React.useState(false);
+  const [isSyncingIg, setIsSyncingIg] = React.useState(false);
   const [isTestingThreads, setIsTestingThreads] = React.useState(false);
+  const [isSyncingThreads, setIsSyncingThreads] = React.useState(false);
   const [isRefreshingThreads, setIsRefreshingThreads] = React.useState(false);
   const [isSavingSettings, setIsSavingSettings] = React.useState(false);
+  const [isSavingBrand, setIsSavingBrand] = React.useState(false);
 
   const [igResult, setIgResult] = React.useState<{
     status: string;
@@ -37,6 +53,7 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
     id?: string;
     permissions?: string[];
     error?: string;
+    detectedUsername?: string;
   } | null>(null);
 
   const [threadsResult, setThreadsResult] = React.useState<{
@@ -44,6 +61,7 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
     username?: string;
     id?: string;
     error?: string;
+    detectedUsername?: string;
   } | null>(null);
 
   const [threadsRefreshMsg, setThreadsRefreshMsg] = React.useState<string | null>(null);
@@ -57,6 +75,29 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
   const [threadsSuffix, setThreadsSuffix] = React.useState(initialSettings.threads_suffix || "");
   const [threadsShowRefCode, setThreadsShowRefCode] = React.useState(initialSettings.threads_show_ref_code !== false);
   const [saveSuccess, setSaveSuccess] = React.useState(false);
+  const [brandSuccess, setBrandSuccess] = React.useState(false);
+
+  // Dynamic Brand Settings state
+  const [brandSettings, setBrandSettings] = React.useState<BrandSettings>({
+    brand_name: "Kampung Inggris Fess",
+    short_brand_name: "KIFess",
+    tagline: "Tell ur untold story!",
+    logo_url: "",
+    favicon_url: "/favicon.ico",
+    instagram_username: "kampunginggrisfess",
+    instagram_url: "https://www.instagram.com/kampunginggrisfess/",
+    threads_username: "kampunginggrisfess",
+    threads_url: "https://www.threads.com/@kampunginggrisfess",
+    managed_by: "Mr.BOB Kampung Inggris",
+    footer_text: "An anonymous community platform for Kampung Inggris students, alumni, visitors, and locals. Managed by Mr.BOB Kampung Inggris.",
+    default_caption: "Tell ur untold story! 🍃\n\nKirim menfess kamu via link di bio.\n\n#kampunginggris #kampunginggrispare #kampunginggrisfess #menfess",
+  });
+
+  React.useEffect(() => {
+    getBrandSettingsAction().then((data) => {
+      if (data) setBrandSettings(data);
+    });
+  }, []);
 
   const handleTestInstagram = async () => {
     setIsTestingIg(true);
@@ -71,6 +112,24 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
     }
   };
 
+  const handleSyncInstagramUsername = async () => {
+    if (!igResult?.detectedUsername) return;
+    setIsSyncingIg(true);
+    try {
+      const res = await syncInstagramUsernameAction(igResult.detectedUsername);
+      if (res.success) {
+        setIgResult({
+          status: "connected",
+          username: igResult.detectedUsername,
+          id: igResult.id,
+          permissions: igResult.permissions,
+        });
+      }
+    } finally {
+      setIsSyncingIg(false);
+    }
+  };
+
   const handleTestThreads = async () => {
     setIsTestingThreads(true);
     setThreadsResult(null);
@@ -81,6 +140,23 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
       setThreadsResult({ status: "error", error: (e as Error).message });
     } finally {
       setIsTestingThreads(false);
+    }
+  };
+
+  const handleSyncThreadsUsername = async () => {
+    if (!threadsResult?.detectedUsername) return;
+    setIsSyncingThreads(true);
+    try {
+      const res = await syncThreadsUsernameAction(threadsResult.detectedUsername);
+      if (res.success) {
+        setThreadsResult({
+          status: "connected",
+          username: threadsResult.detectedUsername,
+          id: threadsResult.id,
+        });
+      }
+    } finally {
+      setIsSyncingThreads(false);
     }
   };
 
@@ -124,6 +200,21 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
     }
   };
 
+  const handleSaveBrandSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingBrand(true);
+    setBrandSuccess(false);
+    try {
+      const res = await updateBrandSettingsAction(brandSettings);
+      if (res.success) {
+        setBrandSuccess(true);
+        setTimeout(() => setBrandSuccess(false), 3000);
+      }
+    } finally {
+      setIsSavingBrand(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Platform Connection Health Cards */}
@@ -143,7 +234,7 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
           <div className="space-y-2 text-xs">
             <div className="flex justify-between py-1 border-b border-[#F5F5F5]">
               <span className="text-[#737373]">Target Username:</span>
-              <span className="font-semibold text-[#171717]">@kampunginggrisfess</span>
+              <span className="font-semibold text-[#171717]">@{brandSettings.instagram_username || "kampunginggrisfess"}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-[#F5F5F5]">
               <span className="text-[#737373]">Account ID:</span>
@@ -160,18 +251,22 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
               className={`p-3 rounded-lg text-xs flex items-start gap-2 ${
                 igResult.status === "connected"
                   ? "bg-[#F0FDF4] border border-[#DCFCE7] text-[#166534]"
+                  : igResult.status === "username_changed"
+                  ? "bg-[#FFFBEB] border border-[#FEF3C7] text-[#B45309]"
                   : "bg-[#FEF2F2] border border-[#FEE2E2] text-[#991B1B]"
               }`}
             >
               {igResult.status === "connected" ? (
                 <CheckCircle2 className="w-4 h-4 shrink-0 text-[#16A34A] mt-0.5" />
               ) : (
-                <AlertCircle className="w-4 h-4 shrink-0 text-[#DC2626] mt-0.5" />
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#D97706] mt-0.5" />
               )}
               <div className="flex-1 space-y-1">
                 <p className="font-semibold">
                   {igResult.status === "connected"
                     ? `Connected to @${igResult.username}`
+                    : igResult.status === "username_changed"
+                    ? "Username Change Detected"
                     : "Connection Check Failed"}
                 </p>
                 {igResult.error && <p className="leading-relaxed">{igResult.error}</p>}
@@ -179,6 +274,16 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
                   <p className="text-[11px] text-[#166534]">
                     Granted: {igResult.permissions.join(", ")}
                   </p>
+                )}
+                {igResult.status === "username_changed" && igResult.detectedUsername && (
+                  <Button
+                    type="button"
+                    onClick={handleSyncInstagramUsername}
+                    disabled={isSyncingIg}
+                    className="mt-2 h-7 px-2.5 text-xs bg-[#D97706] hover:bg-[#B45309] text-white"
+                  >
+                    {isSyncingIg ? "Syncing..." : `Sync to @${igResult.detectedUsername}`}
+                  </Button>
                 )}
               </div>
             </div>
@@ -211,7 +316,7 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
           <div className="space-y-2 text-xs">
             <div className="flex justify-between py-1 border-b border-[#F5F5F5]">
               <span className="text-[#737373]">Target Username:</span>
-              <span className="font-semibold text-[#171717]">@kampunginggrisfess</span>
+              <span className="font-semibold text-[#171717]">@{brandSettings.threads_username || "kampunginggrisfess"}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-[#F5F5F5]">
               <span className="text-[#737373]">User ID:</span>
@@ -228,21 +333,35 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
               className={`p-3 rounded-lg text-xs flex items-start gap-2 ${
                 threadsResult.status === "connected"
                   ? "bg-[#F0FDF4] border border-[#DCFCE7] text-[#166534]"
+                  : threadsResult.status === "username_changed"
+                  ? "bg-[#FFFBEB] border border-[#FEF3C7] text-[#B45309]"
                   : "bg-[#FEF2F2] border border-[#FEE2E2] text-[#991B1B]"
               }`}
             >
               {threadsResult.status === "connected" ? (
                 <CheckCircle2 className="w-4 h-4 shrink-0 text-[#16A34A] mt-0.5" />
               ) : (
-                <AlertCircle className="w-4 h-4 shrink-0 text-[#DC2626] mt-0.5" />
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#D97706] mt-0.5" />
               )}
               <div className="flex-1 space-y-1">
                 <p className="font-semibold">
                   {threadsResult.status === "connected"
                     ? `Connected to @${threadsResult.username}`
+                    : threadsResult.status === "username_changed"
+                    ? "Username Change Detected"
                     : "Threads Check Failed"}
                 </p>
                 {threadsResult.error && <p className="leading-relaxed">{threadsResult.error}</p>}
+                {threadsResult.status === "username_changed" && threadsResult.detectedUsername && (
+                  <Button
+                    type="button"
+                    onClick={handleSyncThreadsUsername}
+                    disabled={isSyncingThreads}
+                    className="mt-2 h-7 px-2.5 text-xs bg-[#D97706] hover:bg-[#B45309] text-white"
+                  >
+                    {isSyncingThreads ? "Syncing..." : `Sync to @${threadsResult.detectedUsername}`}
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -277,6 +396,115 @@ export function SocialIntegrationsClient({ initialSettings }: SocialIntegrations
           </div>
         </div>
       </div>
+
+      {/* Dynamic Brand & Identity Settings */}
+      <form onSubmit={handleSaveBrandSettings} className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-5 space-y-4">
+        <div className="flex items-center justify-between pb-2 border-b border-[#E5E7EB]">
+          <div className="flex items-center gap-2">
+            <Palette className="w-4 h-4 text-[#2563EB]" />
+            <h3 className="text-sm font-semibold text-[#171717]">Brand Identity & Dynamic Profile Settings</h3>
+          </div>
+          {brandSuccess && (
+            <span className="text-xs text-[#16A34A] font-medium flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Saved Dynamically
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div>
+            <label className="block text-[#171717] font-medium mb-1">Brand Name</label>
+            <Input
+              value={brandSettings.brand_name}
+              onChange={(e) => setBrandSettings({ ...brandSettings, brand_name: e.target.value })}
+              className="h-9 text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-[#171717] font-medium mb-1">Short Brand Name / Wordmark</label>
+            <Input
+              value={brandSettings.short_brand_name}
+              onChange={(e) => setBrandSettings({ ...brandSettings, short_brand_name: e.target.value })}
+              className="h-9 text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-[#171717] font-medium mb-1">Tagline</label>
+            <Input
+              value={brandSettings.tagline}
+              onChange={(e) => setBrandSettings({ ...brandSettings, tagline: e.target.value })}
+              className="h-9 text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-[#171717] font-medium mb-1">Managed By Statement</label>
+            <Input
+              value={brandSettings.managed_by}
+              onChange={(e) => setBrandSettings({ ...brandSettings, managed_by: e.target.value })}
+              className="h-9 text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-[#171717] font-medium mb-1">Instagram Username</label>
+            <Input
+              value={brandSettings.instagram_username}
+              onChange={(e) => setBrandSettings({ ...brandSettings, instagram_username: e.target.value })}
+              className="h-9 text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-[#171717] font-medium mb-1">Instagram Profile URL</label>
+            <Input
+              value={brandSettings.instagram_url}
+              onChange={(e) => setBrandSettings({ ...brandSettings, instagram_url: e.target.value })}
+              className="h-9 text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-[#171717] font-medium mb-1">Threads Username</label>
+            <Input
+              value={brandSettings.threads_username}
+              onChange={(e) => setBrandSettings({ ...brandSettings, threads_username: e.target.value })}
+              className="h-9 text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-[#171717] font-medium mb-1">Threads Profile URL</label>
+            <Input
+              value={brandSettings.threads_url}
+              onChange={(e) => setBrandSettings({ ...brandSettings, threads_url: e.target.value })}
+              className="h-9 text-xs"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-[#171717] font-medium mb-1">Footer Text / Community Positioning</label>
+            <Input
+              value={brandSettings.footer_text}
+              onChange={(e) => setBrandSettings({ ...brandSettings, footer_text: e.target.value })}
+              className="h-9 text-xs"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-[#171717] font-medium mb-1">Default Publication Caption Template</label>
+            <textarea
+              value={brandSettings.default_caption}
+              onChange={(e) => setBrandSettings({ ...brandSettings, default_caption: e.target.value })}
+              rows={3}
+              className="w-full p-2.5 text-xs bg-[#FFFFFF] border border-[#E5E7EB] rounded-[10px] text-[#171717] focus:ring-1 focus:ring-[#2563EB]"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <Button
+            type="submit"
+            disabled={isSavingBrand}
+            className="h-9 px-4 text-xs bg-[#2563EB] hover:bg-[#1D4ED8] text-[#FFFFFF] cursor-pointer"
+          >
+            {isSavingBrand ? "Saving..." : "Save Brand Settings"}
+          </Button>
+        </div>
+      </form>
 
       {/* Multi-Platform Publishing Channel Preferences */}
       <form onSubmit={handleSavePreferences} className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-5 space-y-4">

@@ -55,7 +55,8 @@ Designs and implementations must be tested and optimized on mobile viewports fir
 | **File Storage (Phase 03)** | Supabase Storage (S3-compatible) | User-attached photos and rendered slide artifacts |
 | **AI Moderation (Phase 05)** | Google Gemini 2.5 Flash | Free Tier multimodal text and image toxicity screening |
 | **Image Generation (Phase 06)**| Sharp | Server-side 1080×1350 (4:5) slide canvas rendering |
-| **Social API (Phase 07)** | Instagram Graph API | Container creation and carousel publishing |
+| **Social Publishing (Phase 07)** | Instagram Graph API & Threads API | Unified Login container publishing, companion stories, and Threads replies |
+| **Token Security (Phase 07)** | AES-256-GCM Credential Store | Server-side encrypted persistence in `app_credentials` |
 | **Scheduler (Phase 08)** | Supabase Cron / Edge Functions | Scheduled publishing at 12:00 and 19:00 WIB |
 
 ---
@@ -65,11 +66,11 @@ Designs and implementations must be tested and optimized on mobile viewports fir
 - **Phase 01**: Foundation & UI/UX (Complete)
 - **Phase 02**: Supabase & Submission System (Complete)
 - **Phase 02B**: Integration & Security Hardening (Complete)
-- **Phase 03**: Media Upload & Storage Management (Upcoming)
-- **Phase 04**: Admin Dashboard Enhancement (Upcoming)
-- **Phase 05**: Gemini AI Moderation (Free Tier) (Upcoming)
-- **Phase 06**: Feed & Story Generator (Sharp) (Upcoming)
-- **Phase 07**: Instagram API Integration (Upcoming)
+- **Phase 03**: Media Upload & Storage Management (Complete)
+- **Phase 04**: Admin Dashboard Enhancement (Complete)
+- **Phase 05**: Gemini AI Moderation (Free Tier) (Complete)
+- **Phase 06**: Feed & Story Generator (Sharp) (Complete)
+- **Phase 07**: Instagram Graph API & Threads API Multi-Platform Publishing (Complete & Verified)
 - **Phase 08**: Automated Publishing & Scheduler (Upcoming)
 - **Phase 09**: Security, Testing & Production Deployment (Upcoming)
 

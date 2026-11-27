@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { verifyInstagramConnection } from "@/lib/instagram/instagram-service";
-import { verifyThreadsConnection, refreshThreadsToken } from "@/lib/threads/threads-service";
+import { verifyInstagramConnection, syncInstagramUsername } from "@/lib/instagram/instagram-service";
+import { verifyThreadsConnection, refreshThreadsToken, syncThreadsUsername } from "@/lib/threads/threads-service";
 import { executeMultiPlatformPublishing } from "@/lib/publishing/multi-platform-orchestrator";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { getBrandSettings, updateBrandSettings, BrandSettings } from "@/lib/brand/brand-service";
 
 /**
  * Tests connection to Instagram Graph API (Unified Login).
@@ -16,12 +17,47 @@ export async function testInstagramConnectionAction() {
 }
 
 /**
+ * Synchronizes Instagram username after detected rename on platform.
+ */
+export async function syncInstagramUsernameAction(newUsername: string) {
+  const success = await syncInstagramUsername(newUsername);
+  revalidatePath("/admin/settings");
+  return { success };
+}
+
+/**
  * Tests connection to official Threads API.
  * Read-only, no publishing.
  */
 export async function testThreadsConnectionAction() {
   const result = await verifyThreadsConnection();
   return result;
+}
+
+/**
+ * Synchronizes Threads username after detected rename on platform.
+ */
+export async function syncThreadsUsernameAction(newUsername: string) {
+  const success = await syncThreadsUsername(newUsername);
+  revalidatePath("/admin/settings");
+  return { success };
+}
+
+/**
+ * Gets dynamic brand settings.
+ */
+export async function getBrandSettingsAction() {
+  return await getBrandSettings();
+}
+
+/**
+ * Updates dynamic brand settings.
+ */
+export async function updateBrandSettingsAction(data: Partial<BrandSettings>) {
+  const success = await updateBrandSettings(data);
+  revalidatePath("/admin/settings");
+  revalidatePath("/");
+  return { success };
 }
 
 /**
