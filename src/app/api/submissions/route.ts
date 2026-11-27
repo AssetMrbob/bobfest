@@ -17,9 +17,11 @@ export async function POST(request: NextRequest) {
   try {
     // 1. Verify that database is configured; fail closed with 503 if unconfigured
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const secretKey =
+      process.env.SUPABASE_SECRET_KEY ||
+      process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!supabaseUrl || !serviceRoleKey || supabaseUrl.includes("placeholder") || supabaseUrl.includes("your-project")) {
+    if (!supabaseUrl || !secretKey || supabaseUrl.includes("placeholder") || supabaseUrl.includes("your-project")) {
       return NextResponse.json(
         { error: "Submission service is currently unavailable. Database connection is not configured." },
         { status: 503 }

@@ -3,7 +3,9 @@ import { getDashboardMetrics } from "@/app/admin/actions";
 import { AdminStatCard } from "@/components/admin/admin-stat-card";
 import { ArrowRight, Database, AlertCircle } from "lucide-react";
 
-export default async function AdminOverviewPage() {
+import { Suspense } from "react";
+
+async function OverviewContent() {
   const metrics = await getDashboardMetrics();
 
   return (
@@ -17,7 +19,7 @@ export default async function AdminOverviewPage() {
               Supabase Project Connection Pending
             </p>
             <p>
-              Live database credentials (<code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>) are not yet populated in <code>.env.local</code>. Database operations are currently operating in prepared fallback mode.
+              Live database credentials (<code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>SUPABASE_SECRET_KEY</code>) are not yet populated in <code>.env.local</code>. Database operations are currently operating in prepared fallback mode.
             </p>
           </div>
         </div>
@@ -160,5 +162,19 @@ export default async function AdminOverviewPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminOverviewPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 text-center text-sm text-[#737373]">
+          Loading dashboard metrics...
+        </div>
+      }
+    >
+      <OverviewContent />
+    </Suspense>
   );
 }

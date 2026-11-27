@@ -12,14 +12,16 @@ export async function updateSession(request: NextRequest) {
   });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   // If Supabase credentials are not set, allow public routes and redirect /admin to login or inform
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl || !publishableKey) {
     return supabaseResponse;
   }
 
-  const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+  const supabase = createServerClient<Database>(supabaseUrl, publishableKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();

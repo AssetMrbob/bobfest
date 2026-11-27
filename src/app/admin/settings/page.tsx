@@ -4,7 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Save, ShieldCheck, HardDrive, AlertCircle } from "lucide-react";
 import { InstagramIcon } from "@/components/ui/icons";
 
-export default async function AdminSettingsPage() {
+import { Suspense } from "react";
+
+async function SettingsContent() {
   const settings = await getAppSettings();
 
   return (
@@ -202,5 +204,19 @@ export default async function AdminSettingsPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function AdminSettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 text-center text-sm text-[#737373]">
+          Loading settings...
+        </div>
+      }
+    >
+      <SettingsContent />
+    </Suspense>
   );
 }

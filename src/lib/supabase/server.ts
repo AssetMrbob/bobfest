@@ -11,11 +11,13 @@ export async function createServerSupabaseClient() {
   const cookieStore = await cookies();
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   return createServerClient<Database>(
     supabaseUrl || "https://placeholder.supabase.co",
-    supabaseAnonKey || "placeholder-anon-key",
+    publishableKey || "placeholder-publishable-key",
     {
       cookies: {
         getAll() {

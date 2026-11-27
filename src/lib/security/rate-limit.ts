@@ -11,7 +11,11 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { Database } from "@/lib/supabase/types";
 
 export function getClientHmac(ip: string, userAgent: string): string {
-  const serverSecret = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.APP_SECRET || "menfess-salt-key";
+  const serverSecret =
+    process.env.APP_SECRET ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    "menfess-salt-key";
   return createHmac("sha256", serverSecret)
     .update(`${ip}:${userAgent}`)
     .digest("hex");

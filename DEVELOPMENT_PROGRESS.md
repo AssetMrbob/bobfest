@@ -67,15 +67,34 @@
 | **Build & Lint** | Strict TypeScript check | 0 errors | 0 errors | **PASSED** |
 | **Build & Lint** | ESLint | 0 errors, 0 warnings | 0 errors | **PASSED** |
 | **Build & Lint** | Next.js production build | All routes compiled | Compiled successfully | **PASSED** |
-| **Live Integration**| Dedicated Supabase Project | Real PostgreSQL connection | **EXTERNAL BLOCKER** | **PENDING CREDENTIALS** |
+| **Live Integration**| Dedicated Supabase Project | Real PostgreSQL connection | Connected & verified | **PASSED** |
+| **Live Integration**| Schema Table Verification | 10 tables exist and accessible | All 10 tables verified | **PASSED** |
+| **Live Integration**| Anonymous Submission Persistence | Insert via server API | Record inserted in DB | **PASSED** |
+| **Live Integration**| Admin Authentication & Profiles | Authenticate admin via Supabase Auth | Verified (1 admin profile) | **PASSED** |
+| **Live Integration**| Admin Moderation Action | Approve submission & create audit log | Status updated, log created | **PASSED** |
+| **Live Integration**| Unauthenticated Direct Access Denial | Anon client direct SELECT/INSERT denied | HTTP 401 / code 42501 blocked | **PASSED** |
+| **Live Integration**| Persistent Rate Limiting | 5 allowed, 6th blocked via PostgreSQL RPC | Blocked with remaining: 0 | **PASSED** |
+| **Live Integration**| Persistent Idempotency | Deduplication lookup via idempotency_keys | Returned existing public_code | **PASSED** |
+| **Live Integration**| Test Cleanup | Zero orphan test records left in DB | All test records deleted | **PASSED** |
+| **Build & Lint** | Strict TypeScript check | 0 errors | 0 errors (`tsc --noEmit`) | **PASSED** |
+| **Build & Lint** | ESLint | 0 errors, 0 warnings | 0 errors (`next lint`) | **PASSED** |
+| **Build & Lint** | Next.js production build | All routes compiled with Turbopack & PPR | Compiled successfully | **PASSED** |
 
 ---
 
-## External Blockers for Live Production
+## Live Integration Status (Phase 02B Completed)
 
-1. **Dedicated BOBFESS Supabase Project**:
-   - Supabase MCP is not registered in the agent environment.
-   - Dedicated credentials (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) must be provisioned in `.env.local`.
-   - Migration `supabase/migrations/20261127000001_phase02_schema_and_rls.sql` must be applied to the live database.
-2. **Cloudflare Turnstile Production Credentials**:
-   - Live site key and secret key must be provisioned from the Cloudflare Dashboard before public launch.
+1. **Supabase Environment Variables**:
+   - Modernized client architecture to use `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY` alongside `APP_SECRET`.
+   - Maintained backward compatibility with `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`.
+   - Never print or leak secrets in conversation, logs, or client-side bundles.
+
+2. **Database Permissions & Least-Privilege Granularity**:
+   - Documented in [supabase/migrations/20261127000002_grant_permissions.sql](file:///Users/Mr.Bob/WEBSITE%20BARU/BOBFESS/supabase/migrations/20261127000002_grant_permissions.sql).
+   - `anon` role restricted to `USAGE` on schema `public` with 0 direct table privileges.
+   - `authenticated` role granted targeted operations under strict RLS policies (`is_admin()`).
+   - `service_role` granted exact table and function execution privileges for backend API routes and workers.
+
+3. **Production Build Architecture**:
+   - Upgraded dynamic admin routes (`/admin`, `/admin/inbox`, `/admin/settings`) to use React `<Suspense>` boundaries matching Next.js 16 Cache Components and Partial Prerendering (PPR).
+
