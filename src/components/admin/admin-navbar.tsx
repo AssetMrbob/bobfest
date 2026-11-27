@@ -36,7 +36,7 @@ export function AdminNavbar() {
           </button>
 
           <div className="flex items-center gap-1.5 text-xs font-medium">
-            <span className="text-[#737373] hidden sm:inline">menfess.</span>
+            <span className="text-[#737373] hidden sm:inline">Kampung Inggris Fess</span>
             <span className="text-[#A3A3A3] hidden sm:inline">/</span>
             <span className="text-[#171717] font-semibold">{currentLabel}</span>
           </div>

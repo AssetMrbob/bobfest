@@ -364,3 +364,50 @@
 | **8. Multi-Slide Gemini Moderation**| `PASSED` | Combined slide context evaluated with privacy gatekeeper |
 | **9. Global Storage Accounting** | `PASSED` | Templates and publications added to bucket reconciliation |
 | **10. TypeScript & Lint & Build** | `PASSED` | Turbopack compiled successfully across all 13 routes with PPR |
+
+
+---
+
+# Phase 07: Instagram & Threads API Integration + Rebranding to Kampung Inggris Fess
+
+**Status**: Ready for Live Production Scheduler (Phase 08)  
+**Date**: November 28, 2026  
+**New Brand**: Kampung Inggris Fess (@kampunginggrisfess)  
+**Tagline**: Tell ur untold story!  
+**Management**: Managed by Mr.BOB Kampung Inggris  
+
+### 1. Rebranding Summary
+- Rebranded public homepage, navigation, editorial headings, footer, guidelines modal, and privacy policy to Kampung Inggris Fess.
+- Positioned as an open anonymous community platform for students, alumni, visitors, teachers, and locals across all Kampung Inggris courses.
+- Constructive feedback regarding institutions (including Mr.BOB) is officially welcomed and protected against arbitrary rejection.
+- Maintained strict anti-harassment, anti-bullying, and anti-doxxing moderation guidelines.
+
+### 2. Live Meta API Verification (Read-Only)
+- **Instagram Graph API (Unified Login)**:
+  - Host: `https://graph.facebook.com/v21.0`
+  - Account ID: `17841480301270114`
+  - Username: `kampunginggrisfess`
+  - Name: `Kampung Inggris Fess`
+  - Verified Permissions: `instagram_basic`, `instagram_content_publish`, `instagram_manage_comments`, `instagram_manage_messages`, `ads_management`, `ads_read`, `public_profile`.
+  - Content Publishing Status: `GRANTED` & Verified.
+- **Threads Official API**:
+  - Host: `https://graph.threads.net/v1.0`
+  - User ID: `29202039439462395`
+  - Username: `kampunginggrisfess`
+  - Token Type: Long-Lived User Token (60 days).
+  - Quota Usage: 0/250 daily limit (`threads_publishing_limit` returned HTTP 200).
+  - Profile & picture URL verified.
+
+### 3. Architecture & Security
+- **AES-256-GCM Secure Credential Store**: Built server-side encryption/decryption module in `src/lib/security/encryption.ts` using SHA-256 derived keys from server secrets.
+- **Credential Storage Layer**: `src/lib/security/credential-store.ts` reads active credentials prioritizing secure database records before falling back to server environment variables.
+- **Fail-Closed Security**: Identity mismatch between token and configured account immediately aborts publishing with an audit log.
+- **Multi-Platform Publishing Orchestrator**: `src/lib/publishing/multi-platform-orchestrator.ts` supports:
+  - Single Feed Post (1080×1350 JPEG).
+  - 2-Slide Carousel (ordered child containers + parent container).
+  - Companion Story (1080×1920 JPEG published strictly after Feed success).
+  - Threads Main Post (Slide 1 text $\le 500$ chars).
+  - Threads Continuation Reply (Slide 2 text threaded to Slide 1).
+  - Signed URL generation for Meta servers (3600s TTL).
+- **Admin Integrations UI**: Built `SocialIntegrationsClient` in `src/components/admin/social-integrations-client.tsx` with live read-only test buttons and token refresh trigger.
+- **Queue Dry-Run Preview**: Added dry-run execution in `src/components/admin/queue-client.tsx` allowing administrators to validate payload preparation without publishing live.

@@ -1,14 +1,28 @@
-# menfess.
+# Kampung Inggris Fess
 
-> Anonymous Instagram Menfess web application. **"No names. Just words."**
+> An anonymous community platform for Kampung Inggris students, alumni, visitors, and locals. **"Tell ur untold story!"**
+> Managed and maintained by Mr.BOB Kampung Inggris.
+> Official Channels: Instagram [@kampunginggrisfess](https://www.instagram.com/kampunginggrisfess/) · Threads [@kampunginggrisfess](https://www.threads.com/@kampunginggrisfess)
 
-Designed with Swiss minimalism and editorial typography. **Phase 02B** establishes live integration readiness and security hardening: persistent database rate-limiting, hardened RLS, elimination of insecure fallbacks, Cloudflare Turnstile bot protection, and strict mobile-first ergonomics.
+Designed with Swiss minimalism, editorial typography, and high-performance serverless architecture.
+
+---
+
+## Completed Phases
+
+- **Phase 01**: Foundation, Swiss Minimalism UI/UX & Mobile-First Layout
+- **Phase 02 & 02B**: Supabase Submission Engine, Rate Limiting, Turnstile Bot Defense & Security Hardening
+- **Phase 03**: Private Media Upload, Sharp Processing, Duration Checking & Storage Accounting
+- **Phase 04**: Admin Operational Control Center & Mobile Navigation
+- **Phase 05**: Google Gemini AI Moderation (Free Tier Flash-Lite)
+- **Phase 06**: Custom Visual Template Studio, Multi-Slide Rendering (1080×1350 Feed & 1080×1920 Story)
+- **Phase 07**: Instagram Graph API (Unified Login v21.0), Threads Official API (v1.0), Rebranding & Secure Token Store
 
 ---
 
 ## Design System & Tokens
 
-Inspired by classic Swiss typography and functional minimalism:
+Inspired by functional minimalism and editorial clarity:
 
 - **Background**: `#FFFFFF`
 - **Secondary Surface**: `#FAFAFA`
@@ -18,6 +32,7 @@ Inspired by classic Swiss typography and functional minimalism:
 - **Border**: `#E5E7EB`
 - **Border Radius**: 8–12px (`rounded-[10px]`, `rounded-xl`)
 - **Typography**: Geist Sans & Geist Mono
+
 
 ---
 

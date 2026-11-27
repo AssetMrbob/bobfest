@@ -9,9 +9,9 @@ export function Header() {
         {/* Wordmark with blue period (min 44px touch height) */}
         <Link
           href="/"
-          className="min-h-[44px] inline-flex items-center text-lg font-semibold tracking-tight text-[#171717] hover:opacity-90 transition-opacity"
+          className="min-h-[44px] inline-flex items-center text-base sm:text-lg font-semibold tracking-tight text-[#171717] hover:opacity-90 transition-opacity"
         >
-          menfess<span className="text-[#2563EB]">.</span>
+          Kampung Inggris Fess<span className="text-[#2563EB]">.</span>
         </Link>
 
         {/* Minimal navigation with 44px touch targets */}

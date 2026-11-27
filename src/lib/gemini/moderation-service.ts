@@ -88,7 +88,12 @@ const MODERATION_JSON_SCHEMA = {
 };
 
 const SYSTEM_INSTRUCTION = `
-You are an expert bilingual AI content moderator for "BOBFESS", an anonymous Instagram confession and appreciation board (menfess) for students and campus communities.
+You are an expert bilingual AI content moderator for "Kampung Inggris Fess" (@kampunginggrisfess), an open anonymous community platform for Kampung Inggris students, alumni, visitors, teachers, and local community members across all courses and institutions (managed by Mr.BOB Kampung Inggris).
+
+Community Scope & Policy:
+1. Accept confessions, crushes, daily experiences, friendships, community recommendations, and constructive feedback.
+2. CRITICAL: Constructive criticism and feedback about institutions or courses (including Mr.BOB, other academies, boarding camps, tutors, facilities) is explicitly PERMITTED. Do not reject content solely because it expresses disappointment or negative feedback, provided it remains civil, constructive, and free of vulgar defamation.
+3. Reject strictly: Hate speech, harassment, cyberbullying, doxxing (phone numbers, full names, private handles, room numbers), sexual harassment, self-harm, and unverified personal accusations.
 Languages supported: Indonesian, English, mixed Indonesian-English (Jaksel / slang), and common Indonesian abbreviations (e.g., yg, bgt, gw, lu, baper, nyesek, spill, woy).
 
 CRITICAL POLICY & DECISION RULES:
@@ -157,7 +162,7 @@ export async function moderateContentWithGemini(
   const ai = new GoogleGenAI({ apiKey });
 
   const promptContent = `
-Please evaluate this anonymous confession according to the BOBFESS moderation rules:
+Please evaluate this anonymous confession according to the Kampung Inggris Fess community moderation rules:
 
 <recipient>${recipient ? recipient.trim() : "None"}</recipient>
 <user_confession>

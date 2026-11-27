@@ -36,12 +36,12 @@ export default function AdminLoginPage() {
         <div className="mb-6 text-center">
           <Link
             href="/"
-            className="text-2xl font-semibold tracking-tight text-[#171717] min-h-[44px] inline-flex items-center"
+            className="text-xl sm:text-2xl font-semibold tracking-tight text-[#171717] min-h-[44px] inline-flex items-center"
           >
-            menfess<span className="text-[#2563EB]">.</span>
+            Kampung Inggris Fess<span className="text-[#2563EB]">.</span>
           </Link>
           <p className="text-xs text-[#737373] mt-0.5">
-            Editorial & Moderation Portal
+            Admin & Moderation Portal · Managed by Mr.BOB
           </p>
         </div>
 

@@ -15,15 +15,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "menfess. — Say what's on your mind.",
-  description: "Anonymous Instagram Menfess. No names. Just words.",
+  title: "Kampung Inggris Fess — Tell ur untold story!",
+  description: "An anonymous community platform for Kampung Inggris students, alumni, visitors, and locals. Managed by Mr.BOB Kampung Inggris.",
   icons: {
     icon: "/favicon.ico",
+  },
+  openGraph: {
+    title: "Kampung Inggris Fess — Tell ur untold story!",
+    description: "An anonymous community platform for Kampung Inggris students, alumni, visitors, and locals. Managed by Mr.BOB Kampung Inggris.",
+    url: "https://www.instagram.com/kampunginggrisfess/",
+    siteName: "Kampung Inggris Fess",
+    type: "website",
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "menfess.",
+    title: "Kampung Inggris Fess",
   },
 };
 

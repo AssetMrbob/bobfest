@@ -13,10 +13,10 @@ export default function HomePage() {
           {/* Editorial Heading */}
           <div className="mb-6 sm:mb-8 text-center sm:text-left">
             <h1 className="text-2xl sm:text-4xl font-semibold tracking-tight text-[#171717] mb-1.5 sm:mb-2">
-              Say what&apos;s on your mind.
+              Tell ur untold story!
             </h1>
             <p className="text-sm sm:text-base text-[#737373] tracking-tight">
-              No names. Just words.
+              An anonymous community platform for Kampung Inggris.
             </p>
           </div>
 

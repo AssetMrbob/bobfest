@@ -22,11 +22,15 @@ export const DESIGN_TOKENS = {
 } as const;
 
 export const APP_CONFIG = {
-  name: "menfess",
-  tagline: "No names. Just words.",
-  description: "Anonymous Instagram Menfess web application.",
-  instagramHandle: "menfess.id",
-  instagramUrl: "https://instagram.com",
+  name: "Kampung Inggris Fess",
+  shortName: "KIFess",
+  tagline: "Tell ur untold story!",
+  description: "An anonymous community platform for Kampung Inggris students, alumni, visitors, and locals. Managed by Mr.BOB Kampung Inggris.",
+  communityPositioning: "An anonymous community platform for Kampung Inggris. Managed by Mr.BOB Kampung Inggris.",
+  instagramHandle: "kampunginggrisfess",
+  instagramUrl: "https://www.instagram.com/kampunginggrisfess/",
+  threadsHandle: "kampunginggrisfess",
+  threadsUrl: "https://www.threads.com/@kampunginggrisfess",
 } as const;
 
 /**

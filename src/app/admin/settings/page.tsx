@@ -1,9 +1,10 @@
 import { getAppSettings, saveAppSettings, getSystemLogs, getAiQuotaStatus } from "@/app/admin/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Save, ShieldCheck, HardDrive, AlertCircle, Sparkles } from "lucide-react";
+import { Save, ShieldCheck, HardDrive, AlertCircle, Sparkles, Share2 } from "lucide-react";
 import { InstagramIcon } from "@/components/ui/icons";
 import { SystemLogsClient } from "@/components/admin/system-logs-client";
+import { SocialIntegrationsClient } from "@/components/admin/social-integrations-client";
 import { Suspense } from "react";
 import { isGeminiConfigured, getGeminiModelName } from "@/lib/gemini/moderation-service";
 
@@ -291,6 +292,21 @@ async function SettingsContent() {
           </Button>
         </div>
       </form>
+
+      {/* Social Integrations & Platform Health */}
+      <div className="space-y-4 pt-4 border-t border-[#E5E7EB]">
+        <div className="flex items-center gap-2">
+          <Share2 className="w-4 h-4 text-[#2563EB]" />
+          <h2 className="text-base font-semibold text-[#171717]">
+            Social Integrations & Publishing Channels
+          </h2>
+        </div>
+        <p className="text-xs text-[#737373]">
+          Live connection statuses, token verification, and channel preferences for Instagram (@kampunginggrisfess) and Threads (@kampunginggrisfess).
+        </p>
+
+        <SocialIntegrationsClient initialSettings={settings} />
+      </div>
 
       {/* Embedded System Audit Logs */}
       <SystemLogsClient initialLogs={logsData.logs} />
