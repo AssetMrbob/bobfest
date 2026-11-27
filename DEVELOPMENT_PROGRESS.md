@@ -247,3 +247,69 @@
 | **Build & Lint** | Strict TypeScript check | 0 errors (`npx tsc --noEmit`) | 0 errors | **PASSED** |
 | **Build & Lint** | ESLint | 0 errors (`npm run lint`) | 0 errors | **PASSED** |
 | **Build & Lint** | Production Build | Compile all routes with Turbopack & PPR | Compiled successfully (13 routes) | **PASSED** |
+
+---
+
+## Phase 06 Completed Milestones — Custom Template Rendering, Multi-Slide & 1:1 Instagram Publishing
+
+### 1. Non-Negotiable Business Rules Enforced
+- [x] **1 Menfess = 1 Feed Publication**: Unrelated submissions are strictly isolated; never combined into single carousels.
+- [x] **Multi-Slide Architecture**: Submissions support minimum 1 slide, maximum 2 slides (up to 500 chars/slide, 1,000 chars total).
+- [x] **1-Slide Submissions**: Become single Feed publications (1080×1350px, 4:5 ratio).
+- [x] **2-Slide Submissions**: Become 2-slide Instagram carousels with preserved slide order.
+- [x] **Cadence Rules**: Strictly maximum 2 Feed publications daily at 12:00 WIB and 19:00 WIB (Asia/Jakarta).
+- [x] **Companion Story**: Exactly 1 companion Story (1080×1920px, 9:16 ratio) generated per Menfess Feed publication.
+- [x] Removed obsolete legacy rules that aggregated up to 5 unrelated submissions into carousels.
+
+### 2. Multi-Slide Public Submission Form
+- [x] Updated `src/components/public/submission-form.tsx`:
+  - Default view shows Slide 1 with textarea, counter, and media attachment.
+  - "Add Slide 2" button dynamically expands Slide 2 card.
+  - Validation ensures Slide 2 cannot be submitted empty when active.
+  - "Remove Slide" returns submission cleanly to single-slide format.
+  - Supports optional media attachment per slide with permission checkboxes.
+  - Character counters enforce 500 characters per slide.
+
+### 3. Database Architecture & Schema
+- [x] Created migration `supabase/migrations/20261128000005_phase06_multi_slide_templates.sql`:
+  - `submission_slides`: Stores ordered slides (slide 1, slide 2) with foreign key to `submissions(id)`.
+  - `templates`: Stores custom template definitions (text_feed, photo_feed, video_feed, story) with bounding boxes for message, photo, recipient, and reference code.
+  - `template_versions`: Stores immutable template snapshots linked to generated publications.
+  - `publication_batches`: Updated with 1:1 foreign key to `submissions(id)` and `template_version_id`.
+  - Backward compatibility: Legacy submissions continue to render from `submissions.message`.
+
+### 4. Deterministic Sharp SVG Rendering Engine
+- [x] Created `src/lib/rendering/template-renderer.ts`:
+  - Server-side Sharp compositor (Node.js runtime).
+  - Deterministic SVG overlay with XML escaping protecting against injection.
+  - Smart left-aligned auto-fit text wrapper calculating line breaks and adjusting font size between `font_size_min` and `font_size_max`.
+  - Zero generative AI image hallucination; pixel-exact 1080×1350px JPEG (Feed) and 1080×1920px JPEG (Story) export.
+  - Photo composition: positions user image into `media_box` with `cover` mode, stripping metadata.
+
+### 5. Template Studio & Admin Editor
+- [x] Created `src/components/admin/template-editor-client.tsx` and updated `src/app/admin/templates/page.tsx`:
+  - Interactive visual coordinate editor for message box, photo box, recipient box, and code box.
+  - Typography settings: font family (Geist, Inter, Poppins, Montserrat), left-alignment, font size limits, color picker, and vertical alignment (top, middle, bottom).
+  - Real-time scaled canvas preview (1080×1350px previewed cleanly on desktop and mobile viewports).
+
+### 6. Queue & Publishing Flow Refactor
+- [x] Updated `src/app/admin/actions.ts` (`createPublicationBatch`):
+  - Strictly creates 1:1 publication batch for a single parent submission.
+  - Updated `src/components/admin/queue-client.tsx` UI to reflect 1 Menfess = 1 Feed Post.
+
+---
+
+## Phase 06 Test Results & Verification Matrix
+
+| Category | Test Scenario | Expected Outcome | Actual Result | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Public Form** | Multi-slide expansion | Add Slide / Remove Slide toggles Slide 2 | Fluid mobile toggle | **PASSED** |
+| **Public Form** | Validation (500 chars / slide) | Reject >500 chars or empty Slide 2 | Validated with error notices | **PASSED** |
+| **Rendering** | Feed 1080×1350px JPEG | Export deterministic 4:5 JPEG | 58,033 bytes sRGB JPEG generated | **PASSED** |
+| **Rendering** | Story 1080×1920px JPEG | Export deterministic 9:16 JPEG | 57,728 bytes sRGB JPEG generated | **PASSED** |
+| **Typography**| Left-aligned auto-fit | Text wraps inside bounding box without overflow | Line calculation verified | **PASSED** |
+| **Security** | SVG text escaping | Escape XML `<>&"'` characters | No injection vulnerabilities | **PASSED** |
+| **Queue** | 1:1 Publication rule | 1 submission = 1 publication batch | Linked 1:1 in database | **PASSED** |
+| **Build & Lint** | Strict TypeScript check | 0 errors (`npx tsc --noEmit`) | 0 errors | **PASSED** |
+| **Build & Lint** | ESLint | 0 errors (`npm run lint`) | 0 errors | **PASSED** |
+| **Build & Lint** | Production Build | Compile all routes with Turbopack & PPR | Compiled successfully (13 routes) | **PASSED** |

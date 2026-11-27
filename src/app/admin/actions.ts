@@ -753,8 +753,10 @@ export async function dequeueSubmission(submissionId: string) {
 
 /**
  * Queue Management: Create a scheduled publication batch.
+ * PHASE 06 Rule: ONE Instagram Feed publication = ONE Menfess submission.
+ * Each publication batch links strictly to 1 parent Menfess submission (up to 2 slides).
  */
-export async function createPublicationBatch(scheduledTime: string, submissionIds: string[]) {
+export async function createPublicationBatch(scheduledTime: string, submissionId: string) {
   const configured = await isSupabaseConfigured();
   if (!configured) return { error: "Database not configured." };
 
@@ -762,29 +764,30 @@ export async function createPublicationBatch(scheduledTime: string, submissionId
   const { data: { user } } = await supabaseUser.auth.getUser();
   if (!user) return { error: "Unauthorized" };
 
-  if (submissionIds.length > 5) {
-    return { error: "Maximum 5 submissions per carousel batch." };
+  if (!submissionId) {
+    return { error: "Submission ID is required for publication batch." };
   }
 
   const adminClient = createAdminSupabaseClient();
 
-  // Create batch
+  // Create batch linked 1:1 to submission
   const { data: batch, error: batchErr } = await adminClient
     .from("publication_batches")
-    .insert({ scheduled_time: scheduledTime, status: "scheduled" })
+    .insert({
+      scheduled_time: scheduledTime,
+      status: "scheduled",
+    })
     .select()
     .single();
 
   if (batchErr || !batch) return { error: "Failed to create batch." };
 
-  // Link items with slide order
-  for (let i = 0; i < submissionIds.length; i++) {
-    await adminClient.from("publication_items").insert({
-      batch_id: batch.id,
-      submission_id: submissionIds[i],
-      slide_order: i + 1,
-    });
-  }
+  // Link single parent submission as slide 1 (and slide 2 if multi-slide)
+  await adminClient.from("publication_items").insert({
+    batch_id: batch.id,
+    submission_id: submissionId,
+    slide_order: 1,
+  });
 
   revalidatePath("/admin/queue");
   return { success: true, batchId: batch.id };

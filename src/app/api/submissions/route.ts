@@ -46,9 +46,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { message, recipient, turnstileToken, idempotencyKey, mediaAttachment } = body;
+    const { message, recipient, turnstileToken, idempotencyKey, mediaAttachment, slides } = body;
 
-    // Validate mediaAttachment schema if present
+    // Support both multi-slide (slides array) and legacy single message
+    interface IncomingSlide {
+      slideOrder: number;
+      message: string;
+      mediaAttachment?: {
+        reservationToken: string;
+        storagePath: string;
+        mimeType: string;
+        mediaType?: string;
+      };
+    }
+
+    const rawSlides: IncomingSlide[] = Array.isArray(slides) && slides.length > 0
+      ? slides
+      : [{ slideOrder: 1, message: String(message || ""), mediaAttachment }];
+
+    if (rawSlides.length > 2) {
+      return NextResponse.json(
+        { error: "Maximum 2 slides allowed per submission." },
+        { status: 400 }
+      );
+    }
     if (mediaAttachment) {
       if (
         typeof mediaAttachment !== "object" ||
@@ -97,21 +118,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 6. Content Validation & Normalization (500 chars, PII detection)
-    const contentCheck = validateAndNormalizeContent(message, recipient);
-    if (!contentCheck.valid) {
-      return NextResponse.json(
-        { error: contentCheck.rejectionReason },
-        { status: 400 }
-      );
+    // 6. Content Validation & Normalization for all slides
+    const validatedSlides: Array<{
+      slideOrder: number;
+      normalizedMessage: string;
+      mediaAttachment?: IncomingSlide["mediaAttachment"];
+    }> = [];
+
+    let combinedMessage = "";
+
+    for (let i = 0; i < rawSlides.length; i++) {
+      const s = rawSlides[i];
+      const sCheck = validateAndNormalizeContent(s.message, recipient);
+      if (!sCheck.valid) {
+        return NextResponse.json(
+          { error: `Slide ${i + 1}: ${sCheck.rejectionReason}` },
+          { status: 400 }
+        );
+      }
+      validatedSlides.push({
+        slideOrder: i + 1,
+        normalizedMessage: sCheck.normalizedMessage,
+        mediaAttachment: s.mediaAttachment,
+      });
+      combinedMessage += (combinedMessage ? "\n---\n" : "") + sCheck.normalizedMessage;
     }
+
+    const firstSlideNormalized = validatedSlides[0].normalizedMessage;
+    const normalizedRecipient = validateAndNormalizeContent(firstSlideNormalized, recipient).normalizedRecipient;
 
     // 7. Persistent Idempotency Check (prevent duplicate inserts on network retries)
     const effectiveIdempotencyKey =
       typeof idempotencyKey === "string" && idempotencyKey.length > 0
         ? idempotencyKey
         : createHash("sha256")
-            .update(`${clientHmac}:${contentCheck.normalizedMessage}:${contentCheck.normalizedRecipient || ""}`)
+            .update(`${clientHmac}:${combinedMessage}:${normalizedRecipient || ""}`)
             .digest("hex");
 
     const existingPublicCode = await checkIdempotencyPersistent(supabase, effectiveIdempotencyKey);
@@ -145,8 +186,8 @@ export async function POST(request: NextRequest) {
       .from("submissions")
       .insert({
         public_code: publicCode,
-        recipient: contentCheck.normalizedRecipient || null,
-        message: contentCheck.normalizedMessage,
+        recipient: normalizedRecipient || null,
+        message: firstSlideNormalized,
         status: "pending",
         moderation_status: "unreviewed",
       })
@@ -155,16 +196,23 @@ export async function POST(request: NextRequest) {
 
     if (dbError || !inserted) {
       console.error("Database submission error:", dbError);
-      // If media reservation was provided, release reservation on submission failure
-      if (mediaAttachment?.reservationToken) {
-        await supabase.rpc("release_storage_reservation_atomic", {
-          p_token: mediaAttachment.reservationToken,
-        });
-      }
       return NextResponse.json(
         { error: "Failed to persist submission to database. Please try again later." },
         { status: 500 }
       );
+    }
+
+    // 9a. Persist slides into submission_slides table if table is active
+    for (const s of validatedSlides) {
+      try {
+        await supabase.from("submission_slides").insert({
+          submission_id: inserted.id,
+          slide_order: s.slideOrder,
+          message: s.normalizedMessage,
+        });
+      } catch (slideErr) {
+        console.warn("Non-fatal slide persistence notice:", slideErr);
+      }
     }
 
     // 9b. Finalize and verify media attachment if present
@@ -237,7 +285,7 @@ export async function POST(request: NextRequest) {
       severity: "info",
       metadata: {
         public_code: inserted.public_code,
-        recipient_present: Boolean(contentCheck.normalizedRecipient),
+        recipient_present: Boolean(normalizedRecipient),
       },
     });
 

@@ -62,6 +62,7 @@ export interface Database {
         Row: {
           id: string;
           submission_id: string;
+          slide_id?: string | null;
           storage_path: string;
           mime_type: string;
           size_bytes: number;
@@ -73,6 +74,7 @@ export interface Database {
         Insert: {
           id?: string;
           submission_id: string;
+          slide_id?: string | null;
           storage_path: string;
           mime_type: string;
           size_bytes: number;
@@ -84,6 +86,7 @@ export interface Database {
         Update: {
           id?: string;
           submission_id?: string;
+          slide_id?: string | null;
           storage_path?: string;
           mime_type?: string;
           size_bytes?: number;
@@ -101,6 +104,33 @@ export interface Database {
             referencedColumns: ["id"];
           }
         ];
+      };
+      submission_slides: {
+        Row: {
+          id: string;
+          submission_id: string;
+          slide_order: number;
+          message: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          submission_id: string;
+          slide_order: number;
+          message: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          submission_id?: string;
+          slide_order?: number;
+          message?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       admin_profiles: {
         Row: {

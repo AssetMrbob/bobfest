@@ -68,7 +68,7 @@ export function QueueClient({ initialData }: QueueClientProps) {
             Publishing Queue
           </h1>
           <p className="text-xs text-[#737373] mt-0.5">
-            Cadence: 12:00 & 19:00 WIB (Asia/Jakarta) · Max 2 daily Feed batches · Max 5 slides per carousel.
+            Cadence: 12:00 & 19:00 WIB (Asia/Jakarta) · 1 Menfess = 1 Feed Post · Max 2 daily Feed publications · Max 2 slides.
           </p>
         </div>
         <div className="text-xs font-medium text-[#2563EB] bg-[#EFF6FF] px-2.5 py-1 rounded border border-[#DBEAFE]">
@@ -94,7 +94,7 @@ export function QueueClient({ initialData }: QueueClientProps) {
                     <span className="text-[10px] font-mono px-1.5 py-0.5 bg-[#FAFAFA] border border-[#E5E7EB] rounded capitalize">{batch.status}</span>
                   </div>
                   <p className="text-xs text-[#737373] mt-1">
-                    {batch.publication_items?.length || 0} / 5 slides assigned
+                    1 Menfess Post ({batch.publication_items?.length || 1} slide)
                   </p>
                 </div>
                 <button
