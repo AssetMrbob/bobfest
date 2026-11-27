@@ -1,77 +1,91 @@
-# Development Progress — Phase 01
+# Development Progress — Phase 02
 
 **Current Status**: Complete  
 **Project**: menfess. (Anonymous Instagram Menfess Web Application)  
+**Milestone**: Phase 02 — Supabase Database & Anonymous Submission System  
 **Date**: November 27, 2026  
 
 ---
 
-## Phase 01 Milestone Checklist
+## Phase 02 Completed Tasks
 
-- [x] **Project Foundation**
-  - Next.js 16 (App Router) initialized with TypeScript strict mode.
-  - Tailwind CSS configured with Swiss design tokens.
-  - Geist Sans & Geist Mono font loaded via `next/font/google`.
-  - ESLint configuration verified.
-  - Reusable atomic component architecture created in `src/components/ui/`.
-  - Dependencies: `lucide-react`, `clsx`, `tailwind-merge` installed and committed.
+- [x] **Preserve Existing UI & Design Tokens**
+  - Maintained Swiss minimalist aesthetic, `#FFFFFF` background, `#2563EB` blue accent, Geist typography, and clean spacing.
+  - No decorative gradients, glassmorphism, or AI cards introduced.
+  - Mobile responsiveness fully preserved across public and admin interfaces.
 
-- [x] **Design System & Tokens**
-  - Background: `#FFFFFF`
-  - Secondary surface: `#FAFAFA`
-  - Primary accent: `#2563EB` (Used sparingly for primary actions & focus states)
-  - Primary text: `#171717`
-  - Secondary text: `#737373`
-  - Border: `#E5E7EB`
-  - Border radius: 8–12px (`rounded-[10px]`, `rounded-xl`)
-  - Strictly eliminated: Gradients, glassmorphism, decorative blobs, oversized hero sections, excessive shadows, and rounded pill shapes.
+- [x] **Supabase Client Architecture**
+  - Installed `@supabase/supabase-js` and `@supabase/ssr`.
+  - Created browser client (`src/lib/supabase/client.ts`).
+  - Created authenticated server client (`src/lib/supabase/server.ts`).
+  - Created privileged server client (`src/lib/supabase/admin.ts`).
+  - Created session update & route guard middleware (`src/lib/supabase/middleware.ts` & `src/middleware.ts`).
+  - Privileged credentials strictly restricted to server-side code.
 
-- [x] **Public Homepage (`/`)**
-  - Centered single-column layout (max form width 500px).
-  - Wordmark `menfess.` with blue period accent.
-  - Heading: "Say what's on your mind." & Subheading: "No names. Just words."
-  - Form fields:
-    - Optional recipient (`To: "Someone, maybe?"`).
-    - Message textarea with live character counter (`x/500`).
-    - Optional image (<=5MB) or video (<=20MB) upload.
-    - Media preview with remove button and automated URL revocation (`URL.revokeObjectURL`).
-    - Primary button: "Send anonymously".
-  - Privacy footer with guidelines modal, privacy modal, and Instagram link.
+- [x] **Database Schema & Migrations**
+  - Created migration file: `supabase/migrations/20261127000001_phase02_schema_and_rls.sql`.
+  - Defined all 8 required tables: `submissions`, `media_assets` (Phase 03 prepared), `admin_profiles`, `app_settings`, `publication_batches`, `publication_items`, `moderation_logs`, `system_logs`.
+  - Configured constraints, foreign keys, timestamps, indexes, and updated_at trigger.
 
-- [x] **Form States**
-  - [x] Empty state
-  - [x] Typing state (live character counter updating)
-  - [x] Attachment preview state (image/video render with metadata size & removal)
-  - [x] Validation error state (empty message, >500 chars, oversize media, invalid MIME)
-  - [x] Submitting state (spinner, disabled inputs)
-  - [x] Success state ("Message sent. Your message is awaiting moderation." + "Send another")
-  - [x] Submission failure state (interactive "Simulate failure" test toggle)
+- [x] **Row Level Security (RLS)**
+  - Enabled RLS on all 8 tables.
+  - Anonymous users have zero direct `SELECT`, `UPDATE`, or `DELETE` access to `submissions`.
+  - Implemented secure `public.is_admin()` helper function with fixed `search_path`.
+  - Administrator access requires verified role in `admin_profiles`.
 
-- [x] **Admin Interface**
-  - [x] `/admin` (Overview Dashboard with KPIs, schedule, storage gauge, and integration status)
-  - [x] `/admin/login` (Authentication gate with simulated mock login)
-  - [x] `/admin/inbox` (Submissions review table with search, filter tabs, detail dialog, status updates)
-  - [x] `/admin/queue` (Publishing queue for 12:00 and 19:00 WIB daily slots)
-  - [x] `/admin/published` (Published archive with companion Story verification tags)
-  - [x] `/admin/templates` (Swiss editorial slide generator layout and live 4:5 aspect ratio preview)
-  - [x] `/admin/settings` (Business rules, schedules, storage quotas, and limits)
-  - [x] Responsive desktop sidebar and mobile navigation drawer.
+- [x] **Server-Side Anonymous Submission System**
+  - Built endpoint: `POST /api/submissions`.
+  - Enforced server-side text normalization and 500-character limit.
+  - Added PII filter rejecting phone numbers, emails, and sensitive contact patterns.
+  - Implemented in-memory sliding window rate limiting (5 submissions per 10 minutes).
+  - Implemented 60-second idempotency mechanism to prevent accidental duplicate clicks.
+  - Cloudflare Turnstile bot verification helper with production fail-closed behavior.
+  - Replaced mock form on homepage with verified endpoint submission.
+  - Temporarily disabled media attachments with concise *"Media coming soon"* notice.
+  - Success screen displays verified unique public reference code (`MF-XXXXXXXX`).
 
-- [x] **Future System Architecture (Phase 02 Prepared)**
-  - Typed interfaces in `src/lib/types/future-integrations.ts` for Supabase Database, Supabase Storage, Supabase Auth, Supabase Cron, Gemini AI Moderation, Instagram Graph API, Cloudflare Turnstile, and Sharp slide renderer.
-  - Business rules encoded in `src/lib/constants.ts` (2 Feed daily, 12:00 & 19:00 WIB, companion Story, max 500 chars, max 5MB image, max 20MB video, 95% storage threshold, 85% FIFO target).
+- [x] **Admin Authentication & Route Protection**
+  - Connected `/admin/login` to Supabase Auth (`signInWithPassword`) with role verification against `admin_profiles`.
+  - Protected admin routes via Next.js Middleware and server-side layout guards.
+  - Implemented administrative sign-out action.
+  - Documented first administrator provisioning instructions.
 
-- [x] **Documentation**
-  - [x] `.env.example`
-  - [x] `README.md`
-  - [x] `PROJECT_BLUEPRINT.md`
-  - [x] `DEVELOPMENT_PROGRESS.md`
+- [x] **Admin Inbox, Overview & Settings**
+  - Connected `/admin` overview dashboard to real database counts (`submissions` grouped by status).
+  - Connected `/admin/inbox` to real database queries with search, status filtering, pagination, detail dialog, and persistent moderation actions (`approved`, `rejected`, `needs_review`, `queued`).
+  - Implemented confirmation modal for destructive rejection actions.
+  - Moderation decisions recorded in `moderation_logs` audit table.
+  - Connected `/admin/settings` to `app_settings` with emergency submission pause switch.
+  - Integration statuses displayed as *"Not connected"* until credentials are configured.
+
+- [x] **Privacy & Guidelines Copy**
+  - Updated Guidelines and Privacy modals to clearly define the scope of anonymity and moderation.
 
 ---
 
-## Next Steps (Phase 02 — Not Started per Instructions)
-- Connect real Supabase project (Auth, Database, Storage).
-- Integrate Cloudflare Turnstile widget & server verification.
-- Connect Google Gemini 2.5 Flash for automated toxicity classification.
-- Implement Sharp slide renderer for 1080×1350 feed & 1080×1920 story images.
-- Connect Meta / Instagram Graph API for automated carousel and story publication.
+## Verification & Testing Summary
+
+1. **Strict TypeScript Check**: `npx tsc --noEmit` passed with 0 errors.
+2. **ESLint**: `npm run lint` passed with 0 errors and 0 warnings.
+3. **Production Build**: `npm run build` compiled all routes cleanly.
+4. **Endpoint Validation Tests**:
+   - Empty messages rejected with 400.
+   - Messages > 500 characters rejected with 400.
+   - PII (phone numbers, emails) rejected with 400.
+   - Idempotent duplicate requests return existing public code without creating duplicates.
+   - Rate limit triggers with 429 when threshold exceeded.
+   - Valid submissions return 200 with unique reference code.
+
+---
+
+## Remaining External Blockers for Production Deployment
+
+1. **Live Supabase Credentials**:
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` need to be set in `.env.local` pointing to the dedicated BOBFESS Supabase instance.
+   - The migration `supabase/migrations/20261127000001_phase02_schema_and_rls.sql` must be run on the target database.
+2. **Cloudflare Turnstile**:
+   - `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` required before public production deployment.
+3. **Phase 03 Scope (Pending Next Phase)**:
+   - Supabase Storage bucket provisioning and image/video uploads.
+4. **Phase 04 Scope (Pending Next Phase)**:
+   - Gemini 2.5 Flash AI toxicity scoring, Sharp slide generation, and Instagram Graph API publishing.

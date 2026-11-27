@@ -20,13 +20,13 @@ export function GuidelinesModal({
         isOpen={isOpen}
         onClose={onClose}
         title="Community Guidelines"
-        description="Guidelines to keep our anonymous space respectful and constructive."
+        description="Editorial and safety rules governing all menfess submissions."
       >
         <div className="space-y-4 text-xs text-[#171717] leading-relaxed">
           <div>
             <h3 className="font-semibold text-[#171717] mb-1">1. Respect Privacy (No Doxxing)</h3>
             <p className="text-[#737373]">
-              Never submit full real names, phone numbers, personal social media handles, private addresses, or sensitive identifying information.
+              Never submit full names, telephone numbers, personal email addresses, private social handles, or home addresses. Our automated filters immediately reject submissions containing personal contact information.
             </p>
           </div>
           <div>
@@ -38,11 +38,11 @@ export function GuidelinesModal({
           <div>
             <h3 className="font-semibold text-[#171717] mb-1">3. Moderation Notice</h3>
             <p className="text-[#737373]">
-              Submissions undergo human and automated safety moderation before selection into batch carousels. Publication is never guaranteed.
+              Every submission is screened by automated filters and human editors before selection into daily batches. Submitting a message does not guarantee it will be published.
             </p>
           </div>
           <div className="pt-2 border-t border-[#E5E7EB] text-[#737373]">
-            Curated daily at 12:00 & 19:00 WIB into maximum 5-message carousels.
+            Curated daily at 12:00 & 19:00 Asia/Jakarta into maximum 5-message carousels.
           </div>
         </div>
       </Modal>
@@ -54,25 +54,25 @@ export function GuidelinesModal({
       isOpen={isOpen}
       onClose={onClose}
       title="Privacy Policy"
-      description="How your anonymity is protected on menfess."
+      description="How your data is handled and what anonymous means on menfess."
     >
       <div className="space-y-4 text-xs text-[#171717] leading-relaxed">
         <div>
-          <h3 className="font-semibold text-[#171717] mb-1">Public Anonymity</h3>
+          <h3 className="font-semibold text-[#171717] mb-1">Anonymity & Public Display</h3>
           <p className="text-[#737373]">
-            No user accounts, emails, or personal identities are required to submit a menfess. What appears on Instagram includes only your message, optional recipient, and attachment if approved.
+            No user account, email, or name is required to submit a menfess. Sender identities are not displayed publicly. However, please note that absolute anonymity cannot be promised across public internet infrastructure.
           </p>
         </div>
         <div>
-          <h3 className="font-semibold text-[#171717] mb-1">Data Storage</h3>
+          <h3 className="font-semibold text-[#171717] mb-1">Data Retention & Moderation</h3>
           <p className="text-[#737373]">
-            Approved messages are selected into batched carousels. Archived media is subjected to automated FIFO cleanup to protect storage limits and user privacy.
+            Submissions are stored in our secure database with a unique reference code. Approved entries are queued for publication on Instagram. Raw IP addresses are never permanently logged; hashed identifiers are used solely for rate limiting.
           </p>
         </div>
         <div>
-          <h3 className="font-semibold text-[#171717] mb-1">Phase 01 Development Notice</h3>
+          <h3 className="font-semibold text-[#171717] mb-1">Removal Requests</h3>
           <p className="text-[#737373]">
-            Currently operating in Phase 01 Mock Mode. Submissions are processed in client-side state for testing and demonstration purposes without persistent database writes.
+            If you need a submitted message reviewed or removed, please contact our administrative team referencing your unique submission code.
           </p>
         </div>
       </div>

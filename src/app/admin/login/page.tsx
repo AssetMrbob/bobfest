@@ -2,23 +2,31 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Lock, ArrowLeft, ShieldAlert } from "lucide-react";
+import { Lock, ArrowLeft, AlertCircle, ShieldCheck } from "lucide-react";
+import { signInAdmin } from "@/app/admin/actions";
 
 export default function AdminLoginPage() {
-  const router = useRouter();
-  const [username, setUsername] = React.useState("admin");
-  const [password, setPassword] = React.useState("••••••••");
+  const [email, setEmail] = React.useState("admin@menfess.id");
+  const [password, setPassword] = React.useState("admin12345");
   const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setIsLoading(false);
-    router.push("/admin");
+    setError(null);
+
+    const formData = new FormData();
+    formData.append("email", email);
+    formData.append("password", password);
+
+    const result = await signInAdmin(formData);
+    if (result && result.error) {
+      setError(result.error);
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -37,32 +45,43 @@ export default function AdminLoginPage() {
           </p>
         </div>
 
-        {/* Mock Notice */}
+        {/* Security / Provisioning Notice */}
         <div className="mb-4 p-3 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg text-xs text-[#737373] flex items-start gap-2">
-          <ShieldAlert className="w-4 h-4 shrink-0 text-[#2563EB] mt-0.5" />
+          <ShieldCheck className="w-4 h-4 shrink-0 text-[#2563EB] mt-0.5" />
           <p>
-            Phase 01 Mock Mode: Authentication is simulated. Click Sign In to access the admin dashboard.
+            Secured via Supabase Auth. Public registration is disabled. Only pre-provisioned administrators in <code>admin_profiles</code> can authenticate.
           </p>
         </div>
 
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 p-3 bg-[#FEF2F2] border border-[#FEE2E2] rounded-lg text-xs text-[#991B1B] flex items-start gap-2"
+          >
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-[#DC2626]" />
+            <p className="flex-1">{error}</p>
+          </div>
+        )}
+
         {/* Login Form */}
         <form
-          onSubmit={handleLogin}
+          onSubmit={handleSubmit}
           className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-6 space-y-4"
         >
           <div>
             <label
-              htmlFor="admin-username"
+              htmlFor="admin-email"
               className="block text-xs font-medium text-[#171717] mb-1.5"
             >
-              Username
+              Email Address
             </label>
             <Input
-              id="admin-username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              id="admin-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="h-9 text-xs"
+              placeholder="admin@domain.com"
               required
             />
           </div>

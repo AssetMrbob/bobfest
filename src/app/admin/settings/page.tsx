@@ -1,20 +1,11 @@
-"use client";
-
-import * as React from "react";
-import { BUSINESS_RULES } from "@/lib/constants";
+import { getAppSettings, saveAppSettings } from "@/app/admin/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Save, ShieldCheck, HardDrive } from "lucide-react";
+import { Save, ShieldCheck, HardDrive, AlertCircle } from "lucide-react";
 import { InstagramIcon } from "@/components/ui/icons";
 
-export default function AdminSettingsPage() {
-  const [saved, setSaved] = React.useState(false);
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
+export default async function AdminSettingsPage() {
+  const settings = await getAppSettings();
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -25,17 +16,75 @@ export default function AdminSettingsPage() {
             Settings & Business Rules
           </h1>
           <p className="text-xs text-[#737373] mt-0.5">
-            Configure future system thresholds, publication cadences, and storage policies.
+            Configure system thresholds, publication cadences, and storage policies.
           </p>
         </div>
-        {saved && (
-          <span className="text-xs text-[#166534] bg-[#F0FDF4] px-2.5 py-1 rounded border border-[#DCFCE7]">
-            Settings saved (Mock)
+        {!settings.isConfigured && (
+          <span className="text-xs text-[#854D0E] bg-[#FEFCE8] px-2.5 py-1 rounded border border-[#FEF08A]">
+            Local Fallback Mode
           </span>
         )}
       </div>
 
-      <form onSubmit={handleSave} className="space-y-6">
+      {!settings.isConfigured && (
+        <div className="p-3.5 bg-[#FEFCE8] border border-[#FEF08A] rounded-xl text-xs text-[#854D0E] flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 shrink-0 text-[#CA8A04] mt-0.5" />
+          <p>
+            Settings are currently loaded from system constants. To enable live persistence in PostgreSQL, configure Supabase credentials in <code>.env.local</code>.
+          </p>
+        </div>
+      )}
+
+      <form
+        action={async (formData: FormData) => {
+          "use server";
+          await saveAppSettings(formData);
+        }}
+        className="space-y-6"
+      >
+        {/* Submission & Gatekeeper Controls */}
+        <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-5 space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-[#E5E7EB]">
+            <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
+            <h2 className="text-sm font-semibold text-[#171717]">
+              Submission Gatekeeper Controls
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label className="block font-medium text-[#171717] mb-1">
+                Accept Anonymous Submissions
+              </label>
+              <select
+                name="accept_submissions"
+                defaultValue={settings.accept_submissions ? "true" : "false"}
+                className="w-full h-9 px-3 text-xs bg-[#FFFFFF] border border-[#E5E7EB] rounded-[10px] text-[#171717] focus:ring-1 focus:ring-[#2563EB]"
+              >
+                <option value="true">Enabled (Accepting incoming submissions)</option>
+                <option value="false">Paused (Reject new submissions with friendly notice)</option>
+              </select>
+              <span className="text-[11px] text-[#737373] mt-1 block">
+                Emergency switch to pause all incoming public submissions.
+              </span>
+            </div>
+
+            <div>
+              <label className="block font-medium text-[#171717] mb-1">
+                Max Message Character Length
+              </label>
+              <Input
+                defaultValue={settings.max_message_length}
+                disabled
+                className="h-9 text-xs"
+              />
+              <span className="text-[11px] text-[#737373] mt-1 block">
+                Enforced server-side at 500 characters maximum.
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Publishing Rules */}
         <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-5 space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-[#E5E7EB]">
@@ -48,16 +97,18 @@ export default function AdminSettingsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div>
               <label className="block font-medium text-[#171717] mb-1">
-                Max Daily Feed Batches
+                Instagram Auto-Publishing Automation
               </label>
-              <Input
-                defaultValue={BUSINESS_RULES.maxDailyFeedPublications}
-                type="number"
-                disabled
-                className="h-9 text-xs"
-              />
+              <select
+                name="auto_publish_enabled"
+                defaultValue={settings.auto_publish_enabled ? "true" : "false"}
+                className="w-full h-9 px-3 text-xs bg-[#FFFFFF] border border-[#E5E7EB] rounded-[10px] text-[#171717] focus:ring-1 focus:ring-[#2563EB]"
+              >
+                <option value="false">Disabled (Manual trigger only until Phase 04)</option>
+                <option value="true">Enabled (Automated publish at scheduled slots)</option>
+              </select>
               <span className="text-[11px] text-[#737373] mt-1 block">
-                Capped at 2 Feed batches daily to maintain algorithm health.
+                Kept disabled by default per Phase 02 security requirements.
               </span>
             </div>
 
@@ -66,7 +117,7 @@ export default function AdminSettingsPage() {
                 Daily Scheduled Slots (Asia/Jakarta)
               </label>
               <Input
-                defaultValue={BUSINESS_RULES.scheduledSlotsWIB.join(", ")}
+                defaultValue={settings.publish_times?.join(", ") ?? "12:00, 19:00"}
                 disabled
                 className="h-9 text-xs"
               />
@@ -77,11 +128,10 @@ export default function AdminSettingsPage() {
 
             <div>
               <label className="block font-medium text-[#171717] mb-1">
-                Max Messages per Carousel
+                Max Carousel Slides per Batch
               </label>
               <Input
-                defaultValue={BUSINESS_RULES.maxMessagesPerCarousel}
-                type="number"
+                defaultValue={settings.max_carousel_slides}
                 disabled
                 className="h-9 text-xs"
               />
@@ -96,63 +146,10 @@ export default function AdminSettingsPage() {
               </label>
               <div className="p-2.5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg flex items-center justify-between">
                 <span>Auto-publish Story after Feed</span>
-                <span className="font-semibold text-[#2563EB]">Enabled</span>
+                <span className="font-semibold text-[#2563EB]">
+                  {settings.auto_story_enabled ? "Enabled" : "Disabled"}
+                </span>
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Content & Upload Limits */}
-        <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-5 space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[#E5E7EB]">
-            <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
-            <h2 className="text-sm font-semibold text-[#171717]">
-              Submission & Upload Constraints
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div>
-              <label className="block font-medium text-[#171717] mb-1">
-                Max Character Count
-              </label>
-              <Input
-                defaultValue={BUSINESS_RULES.maxCharacterCount}
-                type="number"
-                disabled
-                className="h-9 text-xs"
-              />
-              <span className="text-[11px] text-[#737373] mt-1 block">
-                500 characters max per menfess.
-              </span>
-            </div>
-
-            <div>
-              <label className="block font-medium text-[#171717] mb-1">
-                Max Image Attachment
-              </label>
-              <Input
-                defaultValue={`${BUSINESS_RULES.maxImageSizeMB} MB`}
-                disabled
-                className="h-9 text-xs"
-              />
-              <span className="text-[11px] text-[#737373] mt-1 block">
-                JPG, PNG, WEBP.
-              </span>
-            </div>
-
-            <div>
-              <label className="block font-medium text-[#171717] mb-1">
-                Max Video Attachment
-              </label>
-              <Input
-                defaultValue={`${BUSINESS_RULES.maxVideoSizeMB} MB`}
-                disabled
-                className="h-9 text-xs"
-              />
-              <span className="text-[11px] text-[#737373] mt-1 block">
-                MP4, QuickTime, WEBM.
-              </span>
             </div>
           </div>
         </div>
@@ -162,7 +159,7 @@ export default function AdminSettingsPage() {
           <div className="flex items-center gap-2 pb-2 border-b border-[#E5E7EB]">
             <HardDrive className="w-4 h-4 text-[#2563EB]" />
             <h2 className="text-sm font-semibold text-[#171717]">
-              Supabase Storage & FIFO Cleanup
+              Storage & FIFO Cleanup Targets
             </h2>
           </div>
 
@@ -172,7 +169,7 @@ export default function AdminSettingsPage() {
                 Capacity Threshold
               </label>
               <Input
-                defaultValue={`${BUSINESS_RULES.storageMaxCapacityThresholdPercent}%`}
+                defaultValue={`${settings.storage_capacity_limit_percent}%`}
                 disabled
                 className="h-9 text-xs font-mono"
               />
@@ -186,7 +183,7 @@ export default function AdminSettingsPage() {
                 FIFO Cleanup Target
               </label>
               <Input
-                defaultValue={`${BUSINESS_RULES.storageFifoCleanupTargetPercent}%`}
+                defaultValue={`${settings.storage_cleanup_target_percent}%`}
                 disabled
                 className="h-9 text-xs font-mono"
               />
@@ -200,7 +197,7 @@ export default function AdminSettingsPage() {
         <div className="flex justify-end">
           <Button type="submit" variant="primary" size="md">
             <Save className="w-3.5 h-3.5 mr-1.5" />
-            Save Configuration (Mock)
+            Save Settings
           </Button>
         </div>
       </form>

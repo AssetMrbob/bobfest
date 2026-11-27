@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, ExternalLink, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { signOutAdmin } from "@/app/admin/actions";
 
 const NAV_ITEMS = [
   { label: "Overview", href: "/admin" },
@@ -41,16 +42,15 @@ export function AdminNavbar() {
         </div>
 
         <div className="flex items-center gap-3 text-xs">
-          <span className="hidden sm:inline-block px-2 py-0.5 text-[11px] font-mono text-[#737373] bg-[#FAFAFA] border border-[#E5E7EB] rounded">
-            Mock Mode
-          </span>
-          <Link
-            href="/admin/login"
-            className="inline-flex items-center gap-1.5 text-[#737373] hover:text-[#171717] transition-colors"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Logout</span>
-          </Link>
+          <form action={signOutAdmin}>
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 text-[#737373] hover:text-[#171717] transition-colors cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+          </form>
         </div>
       </header>
 
