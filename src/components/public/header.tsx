@@ -1,0 +1,39 @@
+import Link from "next/link";
+import { InstagramIcon } from "@/components/ui/icons";
+import { APP_CONFIG } from "@/lib/constants";
+
+export function Header() {
+  return (
+    <header className="w-full border-b border-[#E5E7EB] bg-[#FFFFFF]">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+        {/* Wordmark with blue period */}
+        <Link
+          href="/"
+          className="text-lg font-semibold tracking-tight text-[#171717] hover:opacity-90 transition-opacity"
+        >
+          menfess<span className="text-[#2563EB]">.</span>
+        </Link>
+
+        {/* Minimal navigation */}
+        <nav className="flex items-center gap-4 text-xs tracking-tight text-[#737373]">
+          <Link
+            href="/admin"
+            className="hover:text-[#171717] transition-colors"
+          >
+            Admin
+          </Link>
+          <a
+            href={APP_CONFIG.instagramUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Instagram profile"
+            className="inline-flex items-center gap-1.5 hover:text-[#171717] transition-colors"
+          >
+            <InstagramIcon className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">@{APP_CONFIG.instagramHandle}</span>
+          </a>
+        </nav>
+      </div>
+    </header>
+  );
+}
