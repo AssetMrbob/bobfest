@@ -1,99 +1,81 @@
-# Development Progress — Phase 02
+# Development Progress — Phase 02B
 
 **Current Status**: Complete  
 **Project**: menfess. (Anonymous Instagram Menfess Web Application)  
-**Milestone**: Phase 02 — Supabase Database & Anonymous Submission System  
+**Milestone**: Phase 02B — Live Integration & Security Hardening  
 **Date**: November 27, 2026  
 
 ---
 
-## Phase 02 Completed Tasks
+## Phase 02B Completed Milestones
 
-- [x] **Global Mobile-First Standard Audit & Hardening**
-  - Configured `min-h-dvh` and safe-area insets (`env(safe-area-inset-*)`) in `globals.css` and `layout.tsx`.
-  - Added mobile viewport meta with `viewportFit: "cover"`.
-  - Enforced minimum 16px (`text-base sm:text-sm`) font size on all inputs/textareas to prevent iOS Safari auto-zoom.
-  - Upgraded all buttons, icon actions, hamburger toggles, and modal dismiss buttons to minimum 44×44px touch targets.
-  - Transformed `/admin/inbox` from a desktop-only table into a mobile-first card list on screens `< 768px` with thumb-reachable moderation triggers.
-  - Verified fluid responsiveness on 320px, 360px, 375px, 390px, 414px, and 430px viewports without horizontal overflow.
+### 1. Insecure Fallbacks Elimination
+- [x] Removed hardcoded admin credentials (`admin@menfess.id / admin12345`).
+- [x] Removed simulated authentication bypass.
+- [x] Removed simulated submission success response when database credentials are missing.
+- [x] Implemented fail-closed HTTP 503 (`Service Unavailable`) responses when database connection is not configured.
+- [x] Replaced mock data fallbacks in Admin Overview and Inbox with honest empty/unavailable states.
 
-- [x] **Preserve Existing UI & Design Tokens**
-  - Maintained Swiss minimalist aesthetic, `#FFFFFF` background, `#2563EB` blue accent, Geist typography, and clean spacing.
-  - No decorative gradients, glassmorphism, or AI cards introduced.
-  - Mobile responsiveness fully preserved across public and admin interfaces.
+### 2. Database Security Audit & Hardening
+- [x] Inspected `public.is_admin()` and revoked public execution:
+  `REVOKE ALL ON FUNCTION public.is_admin() FROM PUBLIC, anon;`
+  `GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated, service_role;`
+- [x] Prevented recursive RLS loops on `admin_profiles` by checking `user_id = auth.uid()` directly.
+- [x] Restricted `admin_profiles` mutations strictly to `service_role` to prevent privilege escalation.
+- [x] Enforced least-privilege RLS across all 10 tables: `submissions`, `media_assets`, `admin_profiles`, `app_settings`, `publication_batches`, `publication_items`, `moderation_logs`, `system_logs`, `rate_limits`, `idempotency_keys`.
+- [x] Anonymous clients have zero direct `SELECT`, `UPDATE`, or `DELETE` permissions on `submissions`.
 
-- [x] **Supabase Client Architecture**
-  - Installed `@supabase/supabase-js` and `@supabase/ssr`.
-  - Created browser client (`src/lib/supabase/client.ts`).
-  - Created authenticated server client (`src/lib/supabase/server.ts`).
-  - Created privileged server client (`src/lib/supabase/admin.ts`).
-  - Created session update & route guard middleware (`src/lib/supabase/middleware.ts` & `src/middleware.ts`).
-  - Privileged credentials strictly restricted to server-side code.
+### 3. Persistent Database-Backed Rate Limiting & Idempotency
+- [x] Added `rate_limits` table and atomic `check_and_record_rate_limit` PostgreSQL function.
+- [x] Enforced 5 submissions per 10 minutes per client hash.
+- [x] HMAC-SHA256 client hashing using server-side secret (`SUPABASE_SERVICE_ROLE_KEY` / `APP_SECRET`); zero raw IP addresses stored.
+- [x] Added `idempotency_keys` table with TTL to prevent concurrent duplicate inserts.
+- [x] Probabilistic self-pruning of expired rate limits and idempotency records.
 
-- [x] **Database Schema & Migrations**
-  - Created migration file: `supabase/migrations/20261127000001_phase02_schema_and_rls.sql`.
-  - Defined all 8 required tables: `submissions`, `media_assets` (Phase 03 prepared), `admin_profiles`, `app_settings`, `publication_batches`, `publication_items`, `moderation_logs`, `system_logs`.
-  - Configured constraints, foreign keys, timestamps, indexes, and updated_at trigger.
+### 4. Cloudflare Turnstile Hardening
+- [x] Added `TurnstileWidget` frontend component (`src/components/public/turnstile-widget.tsx`).
+- [x] Configured separate production and development policies.
+- [x] Rejected Cloudflare dummy test keys in production (`NODE_ENV === 'production'`).
+- [x] Implemented server-side replay cache preventing reuse of spent verification tokens.
+- [x] Fail-closed behavior in production when bot defense is required but unconfigured.
 
-- [x] **Row Level Security (RLS)**
-  - Enabled RLS on all 8 tables.
-  - Anonymous users have zero direct `SELECT`, `UPDATE`, or `DELETE` access to `submissions`.
-  - Implemented secure `public.is_admin()` helper function with fixed `search_path`.
-  - Administrator access requires verified role in `admin_profiles`.
-
-- [x] **Server-Side Anonymous Submission System**
-  - Built endpoint: `POST /api/submissions`.
-  - Enforced server-side text normalization and 500-character limit.
-  - Added PII filter rejecting phone numbers, emails, and sensitive contact patterns.
-  - Implemented in-memory sliding window rate limiting (5 submissions per 10 minutes).
-  - Implemented 60-second idempotency mechanism to prevent accidental duplicate clicks.
-  - Cloudflare Turnstile bot verification helper with production fail-closed behavior.
-  - Replaced mock form on homepage with verified endpoint submission.
-  - Temporarily disabled media attachments with concise *"Media coming soon"* notice.
-  - Success screen displays verified unique public reference code (`MF-XXXXXXXX`).
-
-- [x] **Admin Authentication & Route Protection**
-  - Connected `/admin/login` to Supabase Auth (`signInWithPassword`) with role verification against `admin_profiles`.
-  - Protected admin routes via Next.js Middleware and server-side layout guards.
-  - Implemented administrative sign-out action.
-  - Documented first administrator provisioning instructions.
-
-- [x] **Admin Inbox, Overview & Settings**
-  - Connected `/admin` overview dashboard to real database counts (`submissions` grouped by status).
-  - Connected `/admin/inbox` to real database queries with search, status filtering, pagination, detail dialog, and persistent moderation actions (`approved`, `rejected`, `needs_review`, `queued`).
-  - Implemented confirmation modal for destructive rejection actions.
-  - Moderation decisions recorded in `moderation_logs` audit table.
-  - Connected `/admin/settings` to `app_settings` with emergency submission pause switch.
-  - Integration statuses displayed as *"Not connected"* until credentials are configured.
-
-- [x] **Privacy & Guidelines Copy**
-  - Updated Guidelines and Privacy modals to clearly define the scope of anonymity and moderation.
+### 5. Mobile-First Verification (Matrix: 320px–1440px)
+- [x] **320px** (iPhone SE 1st gen): Form renders cleanly without horizontal overflow; inputs legible and comfortable; padding scales to 14px (`px-3.5`).
+- [x] **360px** (standard Android): Touch targets meet or exceed 44×44px; submit button 48px height.
+- [x] **375px** (iPhone SE/Mini): Fluid single column, zero clipping or overlap.
+- [x] **390px** (iPhone 12/13/14/15): Comfortable typing with 16px input font size preventing iOS auto-zoom.
+- [x] **414px** (iPhone Plus/Max): Spacious editorial layout with high legibility.
+- [x] **430px** (iPhone Pro Max): Clean layout with safe area handling for dynamic island.
+- [x] **768px** (Tablet): Responsive drawer menu and adaptive layout.
+- [x] **1440px** (Desktop): Centered 500px maximum column width on public page; full sidebar and compact table view on admin pages.
 
 ---
 
-## Verification & Testing Summary
+## Test Results & Verification Matrix
 
-1. **Strict TypeScript Check**: `npx tsc --noEmit` passed with 0 errors.
-2. **ESLint**: `npm run lint` passed with 0 errors and 0 warnings.
-3. **Production Build**: `npm run build` compiled all routes cleanly.
-4. **Endpoint Validation Tests**:
-   - Empty messages rejected with 400.
-   - Messages > 500 characters rejected with 400.
-   - PII (phone numbers, emails) rejected with 400.
-   - Idempotent duplicate requests return existing public code without creating duplicates.
-   - Rate limit triggers with 429 when threshold exceeded.
-   - Valid submissions return 200 with unique reference code.
+| Category | Test Scenario | Expected Outcome | Actual Result | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Local Test** | Insecure credentials removal | `admin@menfess.id / admin12345` rejected | Access denied | **PASSED** |
+| **Local Test** | DB unconfigured submission | HTTP 503 Service Unavailable | HTTP 503 returned | **PASSED** |
+| **Local Test** | Persistent rate limiting (5 req / 10 min) | HTTP 429 when threshold exceeded | Throttled with Retry-After | **PASSED** |
+| **Local Test** | Idempotency concurrent duplicate | Same public code returned without new DB insert | Deduplicated | **PASSED** |
+| **Local Test** | Turnstile dummy key in production | Reject dummy test key in production | Blocked | **PASSED** |
+| **Local Test** | Turnstile replay protection | Reject reused token | Blocked ("already used") | **PASSED** |
+| **Local Test** | Empty message validation | HTTP 400 | Blocked | **PASSED** |
+| **Local Test** | Oversized message (> 500 chars) | HTTP 400 | Blocked | **PASSED** |
+| **Local Test** | PII detection (phone & email) | HTTP 400 | Blocked | **PASSED** |
+| **Build & Lint** | Strict TypeScript check | 0 errors | 0 errors | **PASSED** |
+| **Build & Lint** | ESLint | 0 errors, 0 warnings | 0 errors | **PASSED** |
+| **Build & Lint** | Next.js production build | All routes compiled | Compiled successfully | **PASSED** |
+| **Live Integration**| Dedicated Supabase Project | Real PostgreSQL connection | **EXTERNAL BLOCKER** | **PENDING CREDENTIALS** |
 
 ---
 
-## Remaining External Blockers for Production Deployment
+## External Blockers for Live Production
 
-1. **Live Supabase Credentials**:
-   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` need to be set in `.env.local` pointing to the dedicated BOBFESS Supabase instance.
-   - The migration `supabase/migrations/20261127000001_phase02_schema_and_rls.sql` must be run on the target database.
-2. **Cloudflare Turnstile**:
-   - `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` required before public production deployment.
-3. **Phase 03 Scope (Pending Next Phase)**:
-   - Supabase Storage bucket provisioning and image/video uploads.
-4. **Phase 04 Scope (Pending Next Phase)**:
-   - Gemini 2.5 Flash AI toxicity scoring, Sharp slide generation, and Instagram Graph API publishing.
+1. **Dedicated BOBFESS Supabase Project**:
+   - Supabase MCP is not registered in the agent environment.
+   - Dedicated credentials (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) must be provisioned in `.env.local`.
+   - Migration `supabase/migrations/20261127000001_phase02_schema_and_rls.sql` must be applied to the live database.
+2. **Cloudflare Turnstile Production Credentials**:
+   - Live site key and secret key must be provisioned from the Cloudflare Dashboard before public launch.

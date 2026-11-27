@@ -1,5 +1,5 @@
 -- ==============================================================================
--- BOBFESS Phase 02: Database Schema & Row Level Security (RLS)
+-- BOBFESS Phase 02B: Database Schema, Persistent Rate Limiting & Hardened RLS
 -- ==============================================================================
 
 -- 1. Create custom enum types
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS public.media_assets (
   deleted_at TIMESTAMPTZ NULL
 );
 
--- 4. Admin profiles table (References Supabase Auth)
+-- 4. Admin profiles table (References Supabase Auth auth.users)
 CREATE TABLE IF NOT EXISTS public.admin_profiles (
   user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   role VARCHAR(50) NOT NULL DEFAULT 'admin',
@@ -118,6 +118,21 @@ CREATE TABLE IF NOT EXISTS public.system_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- 10. Persistent Rate Limiting table (Stores HMAC hashes only; zero raw IP addresses)
+CREATE TABLE IF NOT EXISTS public.rate_limits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_hash VARCHAR(64) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 11. Idempotency Keys table (Prevents duplicate concurrent inserts; TTL enforced)
+CREATE TABLE IF NOT EXISTS public.idempotency_keys (
+  key VARCHAR(64) PRIMARY KEY,
+  public_code VARCHAR(32) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
 -- ==============================================================================
 -- Performance & Lookup Indexes
 -- ==============================================================================
@@ -128,6 +143,8 @@ CREATE INDEX IF NOT EXISTS idx_media_assets_submission ON public.media_assets(su
 CREATE INDEX IF NOT EXISTS idx_publication_items_batch ON public.publication_items(batch_id);
 CREATE INDEX IF NOT EXISTS idx_moderation_logs_submission ON public.moderation_logs(submission_id);
 CREATE INDEX IF NOT EXISTS idx_system_logs_event_type ON public.system_logs(event_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rate_limits_client_hash ON public.rate_limits(client_hash, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_idempotency_expires ON public.idempotency_keys(expires_at);
 
 -- Automatic updated_at trigger function
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
@@ -147,6 +164,89 @@ CREATE TRIGGER trg_submissions_updated_at
   EXECUTE FUNCTION public.handle_updated_at();
 
 -- ==============================================================================
+-- Privileged Helper Functions (Hardened & Protected)
+-- ==============================================================================
+
+-- Helper function to check if current authenticated user has admin role.
+-- Safe SECURITY DEFINER with fixed search_path.
+-- Direct check against admin_profiles avoiding recursive policy loops.
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, auth, pg_temp
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.admin_profiles
+    WHERE user_id = auth.uid() AND role = 'admin'
+  );
+$$;
+
+-- Restrict function execution: anonymous and public cannot invoke is_admin via Data API
+REVOKE ALL ON FUNCTION public.is_admin() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_admin() FROM anon;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO service_role;
+
+-- Atomic persistent rate limit evaluator
+CREATE OR REPLACE FUNCTION public.check_and_record_rate_limit(
+  p_client_hash VARCHAR(64),
+  p_max_requests INT DEFAULT 5,
+  p_window_interval INTERVAL DEFAULT INTERVAL '10 minutes'
+)
+RETURNS TABLE (
+  allowed BOOLEAN,
+  current_count INT,
+  remaining INT,
+  reset_seconds INT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_count INT;
+  v_oldest TIMESTAMPTZ;
+  v_window_start TIMESTAMPTZ := now() - p_window_interval;
+BEGIN
+  -- Count attempts in sliding window
+  SELECT COUNT(*), MIN(created_at)
+  INTO v_count, v_oldest
+  FROM public.rate_limits
+  WHERE client_hash = p_client_hash AND created_at > v_window_start;
+
+  IF v_count >= p_max_requests THEN
+    RETURN QUERY SELECT
+      false,
+      v_count,
+      0,
+      GREATEST(1, EXTRACT(EPOCH FROM (v_oldest + p_window_interval - now()))::INT);
+    RETURN;
+  END IF;
+
+  -- Record this attempt
+  INSERT INTO public.rate_limits (client_hash, created_at)
+  VALUES (p_client_hash, now());
+
+  -- Probabilistic self-cleanup of old records (approx 5% of requests)
+  IF random() < 0.05 THEN
+    DELETE FROM public.rate_limits WHERE created_at < now() - INTERVAL '1 hour';
+    DELETE FROM public.idempotency_keys WHERE expires_at < now();
+  END IF;
+
+  RETURN QUERY SELECT
+    true,
+    v_count + 1,
+    p_max_requests - (v_count + 1),
+    EXTRACT(EPOCH FROM p_window_interval)::INT;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.check_and_record_rate_limit FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.check_and_record_rate_limit TO service_role;
+
+-- ==============================================================================
 -- Row Level Security (RLS) & Policies
 -- ==============================================================================
 
@@ -158,21 +258,8 @@ ALTER TABLE public.publication_batches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.publication_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.moderation_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
-
--- Helper function to check if current authenticated user has admin role
--- Safe SECURITY DEFINER with fixed search_path
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS BOOLEAN
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public, auth
-STABLE
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.admin_profiles
-    WHERE user_id = auth.uid() AND role = 'admin'
-  );
-$$;
+ALTER TABLE public.rate_limits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.idempotency_keys ENABLE ROW LEVEL SECURITY;
 
 -- Submissions policies:
 -- Anonymous clients have ZERO direct SELECT, UPDATE, or DELETE access.
@@ -195,14 +282,15 @@ CREATE POLICY "Admin full access to media_assets"
   USING (public.is_admin())
   WITH CHECK (public.is_admin());
 
--- Admin profiles policies:
+-- Admin profiles policies (Recursion-proof: reads user_id = auth.uid() directly):
 DROP POLICY IF EXISTS "Users can read own profile" ON public.admin_profiles;
 CREATE POLICY "Users can read own profile"
   ON public.admin_profiles
   FOR SELECT
   TO authenticated
-  USING (user_id = auth.uid() OR public.is_admin());
+  USING (user_id = auth.uid());
 
+-- Modification of admin_profiles is strictly restricted to service_role to prevent privilege escalation
 DROP POLICY IF EXISTS "Admin manage admin profiles" ON public.admin_profiles;
 CREATE POLICY "Admin manage admin profiles"
   ON public.admin_profiles
@@ -249,6 +337,23 @@ CREATE POLICY "Admin full access to moderation_logs"
 DROP POLICY IF EXISTS "Admin full access to system_logs" ON public.system_logs;
 CREATE POLICY "Admin full access to system_logs"
   ON public.system_logs
+  FOR ALL
+  TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+-- Rate limits & Idempotency: service role only
+DROP POLICY IF EXISTS "Admin full access to rate_limits" ON public.rate_limits;
+CREATE POLICY "Admin full access to rate_limits"
+  ON public.rate_limits
+  FOR ALL
+  TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admin full access to idempotency_keys" ON public.idempotency_keys;
+CREATE POLICY "Admin full access to idempotency_keys"
+  ON public.idempotency_keys
   FOR ALL
   TO authenticated
   USING (public.is_admin())

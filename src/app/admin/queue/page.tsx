@@ -8,18 +8,7 @@ import { Clock } from "lucide-react";
 import { InstagramIcon } from "@/components/ui/icons";
 
 export default function AdminQueuePage() {
-  const [slots, setSlots] = React.useState<QueueSlot[]>(MOCK_QUEUE_SLOTS);
-  const [isProcessing, setIsProcessing] = React.useState(false);
-
-  const simulatePublish = (slotId: string) => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      setSlots((prev) =>
-        prev.map((s) => (s.id === slotId ? { ...s, status: "published" } : s))
-      );
-      setIsProcessing(false);
-    }, 800);
-  };
+  const [slots] = React.useState<QueueSlot[]>(MOCK_QUEUE_SLOTS);
 
   return (
     <div className="space-y-6">
@@ -70,12 +59,11 @@ export default function AdminQueuePage() {
 
                   <Button
                     size="sm"
-                    variant={slot.status === "published" ? "secondary" : "primary"}
-                    disabled={filledCount === 0 || slot.status === "published" || isProcessing}
-                    onClick={() => simulatePublish(slot.id)}
+                    variant="secondary"
+                    disabled
                     className="text-xs"
                   >
-                    {slot.status === "published" ? "Published" : "Trigger Batch (Mock)"}
+                    Scheduled (Phase 08 Automation)
                   </Button>
                 </div>
               </div>

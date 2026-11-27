@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { SubmissionStatus } from "@/lib/supabase/types";
-import { MOCK_DASHBOARD_METRICS, MOCK_SUBMISSIONS } from "@/lib/mock-data";
 
 /**
  * Checks if real Supabase credentials are configured in the environment.
@@ -24,7 +23,9 @@ export async function isSupabaseConfigured(): Promise<boolean> {
 }
 
 /**
- * Admin Sign In with Email & Password
+ * Admin Sign In with Email & Password.
+ * Zero hardcoded fallback credentials.
+ * Enforces server-side admin role verification in admin_profiles.
  */
 export async function signInAdmin(formData: FormData) {
   const email = formData.get("email")?.toString().trim();
@@ -36,14 +37,9 @@ export async function signInAdmin(formData: FormData) {
 
   const configured = await isSupabaseConfigured();
   if (!configured) {
-    // If Supabase credentials are not yet configured in local environment,
-    // permit local admin demo sign-in with clear disclosure.
-    if (email === "admin@menfess.id" && password === "admin12345") {
-      redirect("/admin");
-    }
     return {
       error:
-        "Supabase credentials not configured in .env.local. (For local dev demo, use admin@menfess.id / admin12345)",
+        "Authentication service unavailable. Dedicated Supabase database credentials are not configured on the server.",
     };
   }
 
@@ -58,7 +54,7 @@ export async function signInAdmin(formData: FormData) {
     return { error: authError?.message || "Invalid credentials." };
   }
 
-  // Verify that user has admin role in admin_profiles table
+  // Verify that user has verified admin role in admin_profiles table
   const { data: profile } = await supabase
     .from("admin_profiles")
     .select("role")
@@ -86,21 +82,62 @@ export async function signOutAdmin() {
 }
 
 /**
- * Fetch real dashboard KPI counts from Supabase
+ * Fetch real dashboard KPI counts from Supabase.
+ * Returns serviceUnavailable: true with zero counts if database is unavailable.
+ * Never returns fabricated or mock data.
  */
 export async function getDashboardMetrics() {
   const configured = await isSupabaseConfigured();
   if (!configured) {
     return {
-      ...MOCK_DASHBOARD_METRICS,
       isConfigured: false,
+      serviceUnavailable: true,
+      totalSubmissions: 0,
+      queuedMessages: 0,
+      publishedToday: 0,
+      messagesNeedingReview: 0,
+      approvedCount: 0,
+      rejectedCount: 0,
+      nextScheduledSlot: {
+        time: "19:00 WIB",
+        timezone: "Asia/Jakarta",
+      },
+      integrations: {
+        supabaseDb: {
+          name: "Supabase Database",
+          connected: false,
+          statusText: "Not connected",
+        },
+        supabaseStorage: {
+          name: "Supabase Storage",
+          connected: false,
+          statusText: "Phase 03 Prepared",
+        },
+        geminiModeration: {
+          name: "Gemini 2.5 Flash",
+          connected: false,
+          statusText: "Not connected",
+        },
+        instagramGraph: {
+          name: "Instagram Graph API",
+          connected: false,
+          statusText: "Not connected",
+        },
+        cloudflareTurnstile: {
+          name: "Cloudflare Turnstile",
+          connected: Boolean(process.env.TURNSTILE_SECRET_KEY),
+          statusText: Boolean(process.env.TURNSTILE_SECRET_KEY)
+            ? "Configured"
+            : "Not connected",
+        },
+      },
     };
   }
 
   try {
     const supabase = createAdminSupabaseClient();
 
-    // Query real counts
+    // Query real database counts
     const { count: totalSubmissions } = await supabase
       .from("submissions")
       .select("*", { count: "exact", head: true });
@@ -137,14 +174,17 @@ export async function getDashboardMetrics() {
 
     return {
       isConfigured: true,
+      serviceUnavailable: false,
       totalSubmissions: totalSubmissions || 0,
       queuedMessages: queuedCount || 0,
       publishedToday: publishedToday || 0,
       messagesNeedingReview: (pendingCount || 0) + (needsReviewCount || 0),
       approvedCount: approvedCount || 0,
       rejectedCount: rejectedCount || 0,
-      nextScheduledSlot: MOCK_DASHBOARD_METRICS.nextScheduledSlot,
-      storage: MOCK_DASHBOARD_METRICS.storage,
+      nextScheduledSlot: {
+        time: "19:00 WIB",
+        timezone: "Asia/Jakarta",
+      },
       integrations: {
         supabaseDb: {
           name: "Supabase Database",
@@ -178,14 +218,52 @@ export async function getDashboardMetrics() {
   } catch (err) {
     console.error("Error fetching dashboard metrics:", err);
     return {
-      ...MOCK_DASHBOARD_METRICS,
       isConfigured: false,
+      serviceUnavailable: true,
+      totalSubmissions: 0,
+      queuedMessages: 0,
+      publishedToday: 0,
+      messagesNeedingReview: 0,
+      approvedCount: 0,
+      rejectedCount: 0,
+      nextScheduledSlot: {
+        time: "19:00 WIB",
+        timezone: "Asia/Jakarta",
+      },
+      integrations: {
+        supabaseDb: {
+          name: "Supabase Database",
+          connected: false,
+          statusText: "Connection error",
+        },
+        supabaseStorage: {
+          name: "Supabase Storage",
+          connected: false,
+          statusText: "Phase 03 Prepared",
+        },
+        geminiModeration: {
+          name: "Gemini 2.5 Flash",
+          connected: false,
+          statusText: "Not connected",
+        },
+        instagramGraph: {
+          name: "Instagram Graph API",
+          connected: false,
+          statusText: "Not connected",
+        },
+        cloudflareTurnstile: {
+          name: "Cloudflare Turnstile",
+          connected: false,
+          statusText: "Not connected",
+        },
+      },
     };
   }
 }
 
 /**
- * Fetch submissions from Supabase with status filter, search query, and pagination
+ * Fetch real submissions from Supabase with status filter, search query, and pagination.
+ * Never returns mock submissions when database is unavailable.
  */
 export async function getAdminSubmissions(params: {
   status?: string;
@@ -197,23 +275,11 @@ export async function getAdminSubmissions(params: {
   const configured = await isSupabaseConfigured();
 
   if (!configured) {
-    let filtered = [...MOCK_SUBMISSIONS];
-    if (status !== "all") {
-      filtered = filtered.filter((s) => s.status === status);
-    }
-    if (query) {
-      const q = query.toLowerCase();
-      filtered = filtered.filter(
-        (s) =>
-          s.message.toLowerCase().includes(q) ||
-          (s.recipient && s.recipient.toLowerCase().includes(q)) ||
-          s.id.toLowerCase().includes(q)
-      );
-    }
     return {
       isConfigured: false,
-      submissions: filtered.slice(offset, offset + limit),
-      totalCount: filtered.length,
+      serviceUnavailable: true,
+      submissions: [],
+      totalCount: 0,
     };
   }
 
@@ -244,6 +310,7 @@ export async function getAdminSubmissions(params: {
 
     return {
       isConfigured: true,
+      serviceUnavailable: false,
       submissions: (data || []).map((row) => ({
         id: row.public_code || row.id,
         rawId: row.id,
@@ -259,6 +326,7 @@ export async function getAdminSubmissions(params: {
     console.error("Submissions query failed:", err);
     return {
       isConfigured: false,
+      serviceUnavailable: true,
       submissions: [],
       totalCount: 0,
     };
@@ -276,9 +344,7 @@ export async function moderateSubmission(
   const configured = await isSupabaseConfigured();
 
   if (!configured) {
-    revalidatePath("/admin/inbox");
-    revalidatePath("/admin");
-    return { success: true, message: "Status updated in mock state." };
+    return { error: "Service unavailable: Database connection is not configured." };
   }
 
   const supabase = createAdminSupabaseClient();
@@ -332,6 +398,7 @@ export async function getAppSettings() {
   if (!configured) {
     return {
       isConfigured: false,
+      serviceUnavailable: true,
       accept_submissions: true,
       auto_publish_enabled: false,
       max_daily_feed_posts: 2,
@@ -357,6 +424,7 @@ export async function getAppSettings() {
 
   return {
     isConfigured: true,
+    serviceUnavailable: false,
     ...(data || {}),
   };
 }
@@ -364,8 +432,7 @@ export async function getAppSettings() {
 export async function saveAppSettings(formData: FormData) {
   const configured = await isSupabaseConfigured();
   if (!configured) {
-    revalidatePath("/admin/settings");
-    return { success: true, message: "Settings saved in local mock mode." };
+    return { error: "Service unavailable: Database connection is not configured." };
   }
 
   const acceptSubmissions = formData.get("accept_submissions") === "true";
@@ -381,7 +448,7 @@ export async function saveAppSettings(formData: FormData) {
     .eq("id", "global");
 
   if (error) {
-    return { error: "Failed to save settings." };
+    return { error: "Failed to save settings to database." };
   }
 
   revalidatePath("/admin/settings");

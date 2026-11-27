@@ -2,7 +2,7 @@
 
 > Anonymous Instagram Menfess web application. **"No names. Just words."**
 
-Designed with Swiss minimalism and editorial typography. Phase 02 implements the complete Supabase database schema, server-side anonymous submission endpoint, anti-abuse defenses, and administrative moderation workflows.
+Designed with Swiss minimalism and editorial typography. **Phase 02B** establishes live integration readiness and security hardening: persistent database rate-limiting, hardened RLS, elimination of insecure fallbacks, Cloudflare Turnstile bot protection, and strict mobile-first ergonomics.
 
 ---
 
@@ -21,41 +21,36 @@ Inspired by classic Swiss typography and functional minimalism:
 
 ---
 
-## Phase 02 Completed Features
+## Phase 02B Hardening & Completed Features
 
-### 1. Anonymous Public Submission (`/` & `POST /api/submissions`)
-- **Zero Registration**: Visitors can submit without creating an account or providing email/phone details.
-- **Server-Side Validation**:
-  - Enforced 500-character ceiling.
-  - Whitespace and newline normalization.
-  - Automatic PII rejection (phone numbers, email addresses, doxxing keywords).
-- **Anti-Abuse Protections**:
-  - Sliding-window rate limiting (5 requests per 10 minutes per client hash).
-  - 60-second idempotency mechanism preventing accidental duplicate clicks.
-  - Cloudflare Turnstile bot verification support (fails closed in production).
-- **Unique Reference Code**: Every valid submission receives a cryptographically generated reference (e.g. `MF-K7W92QPA`).
-- **Media Notice**: Media upload is temporarily locked with a concise *"Media coming soon"* notice pending Phase 03.
+### 1. Zero Insecure Fallbacks
+- **No Hardcoded Credentials**: Default accounts and hardcoded passwords removed completely.
+- **Fail-Closed Architecture**: If database credentials are not configured, public submissions and administrative operations fail safely with HTTP 503 (`Service Unavailable`). No simulated or fake success responses are returned.
+- **Honest Administrative States**: Admin Inbox and Overview display zero counts and clear service-unavailable notices when live database connections are unconfigured.
 
-### 2. Database & Row Level Security (RLS)
-- Production-grade schema in `supabase/migrations/20261127000001_phase02_schema_and_rls.sql`:
-  - `submissions`: Core anonymous entries with audit timestamps and status enum.
-  - `media_assets`: Storage metadata schema prepared for Phase 03.
-  - `admin_profiles`: Administrator role mapping linked to Supabase Auth.
-  - `app_settings`: Typed application settings with submission emergency pause switch.
-  - `publication_batches` & `publication_items`: Batch scheduling structure for 12:00 & 19:00 WIB.
-  - `moderation_logs`: Full audit history for moderation actions.
-  - `system_logs`: Sanitized operational events without credentials or raw IPs.
-- Least-Privilege RLS:
-  - Anonymous users have zero direct `SELECT`, `UPDATE`, or `DELETE` access to `submissions`.
-  - All public submissions are created exclusively via the secured server endpoint.
-  - Only administrators verified by `public.is_admin()` can view or update administrative records.
+### 2. Hardened Database & Row Level Security (RLS)
+Migration located at `supabase/migrations/20261127000001_phase02_schema_and_rls.sql`:
+- **10 Core Tables**: `submissions`, `media_assets` (Phase 03 prepared), `admin_profiles`, `app_settings`, `publication_batches`, `publication_items`, `moderation_logs`, `system_logs`, `rate_limits`, `idempotency_keys`.
+- **Privileged Helper Restriction**: Execution permissions on `public.is_admin()` and `public.check_and_record_rate_limit` are revoked from `PUBLIC` and `anon`.
+- **Recursion-Proof RLS**: `admin_profiles` policies check `user_id = auth.uid()` directly without triggering recursive queries.
+- **Zero Public Access**: Anonymous users cannot directly read, modify, or delete `submissions` records.
 
-### 3. Protected Admin Interface
-- **Supabase Auth**: Real email/password authentication gate at `/admin/login`.
-- **Role Verification**: Middleware and server actions strictly enforce admin privileges.
-- **Inbox Moderation** (`/admin/inbox`): Real database-connected list with search, status filters (`pending`, `needs_review`, `approved`, `queued`, `published`, `rejected`), modal viewer, and action buttons.
-- **Overview Dashboard** (`/admin`): Live database counts for total, pending, approved, queued, and rejected entries.
-- **Settings** (`/admin/settings`): Live toggles for submission intake and publishing rules.
+### 3. Persistent Database Rate Limiting & Idempotency
+- **Persistent Rate Limiting**: Enforces 5 submissions per 10 minutes per client using PostgreSQL atomic transactions.
+- **HMAC-SHA256 Identifiers**: Client hashes are generated using a server-side secret (`APP_SECRET`). Zero raw IP addresses are stored.
+- **Idempotency Guard**: Rejects duplicate inserts within 60 seconds of identical submissions.
+- **Vercel Serverless Ready**: Fully stateless application code backed by persistent PostgreSQL state.
+
+### 4. Cloudflare Turnstile Bot Defense
+- **Interactive Widget**: Frontend `TurnstileWidget` mounts automatically when `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is configured.
+- **Replay Protection**: Verified tokens are cached to prevent token reuse.
+- **Production Guard**: Cloudflare dummy test keys are strictly blocked in production mode (`NODE_ENV === 'production'`).
+
+### 5. Mandatory Mobile-First Ergonomics
+- Minimum 44×44px touch targets across all buttons, navigation items, modal close triggers, and moderation controls.
+- Minimum 16px font size (`text-base sm:text-sm`) on form inputs to eliminate iOS Safari auto-zoom.
+- Dynamic viewport height support (`min-h-dvh`) and safe-area insets (`env(safe-area-inset-top)`, `env(safe-area-inset-bottom)`).
+- Desktop tables automatically adapt into touch-friendly cards/lists on mobile screens (`< 768px`).
 
 ---
 
@@ -74,48 +69,55 @@ npm install
 cp .env.example .env.local
 ```
 
-Populate `.env.local` with your Supabase credentials:
+Populate `.env.local` with your dedicated BOBFESS Supabase credentials:
 ```env
-NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
+NEXT_PUBLIC_SUPABASE_URL="https://your-dedicated-project.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
 SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+APP_SECRET="your-strong-random-secret"
 ```
 
-### 2. Apply Database Migrations
+### 2. Apply Database Migration
 
-Run the SQL migration in the Supabase Dashboard SQL Editor:
-- Copy contents of `supabase/migrations/20261127000001_phase02_schema_and_rls.sql`
-- Execute in Supabase SQL Editor.
+In the Supabase SQL Editor for your dedicated project:
+- Execute `supabase/migrations/20261127000001_phase02_schema_and_rls.sql`.
 
 ### 3. Provision the First Administrator
 
-In the Supabase SQL Editor:
 ```sql
--- 1. Create user in auth.users (via Supabase Auth Dashboard or SQL)
--- 2. Link user to admin_profiles:
+-- Link an existing auth.users record to admin_profiles:
 INSERT INTO public.admin_profiles (user_id, role)
 VALUES ('<USER-UUID-FROM-AUTH-USERS>', 'admin')
 ON CONFLICT (user_id) DO NOTHING;
 ```
 
-*(For local testing without live Supabase credentials, the application operates in safe fallback mode using `admin@menfess.id` / `admin12345`).*
-
-### 4. Run Locally
+### 4. Verification & Build Commands
 
 ```bash
-# Start development server
-npm run dev
+# Strict TypeScript check
+npx tsc --noEmit
 
-# Run type check and lint
-npx tsc --noEmit && npm run lint
+# Linting
+npm run lint
 
 # Production build
 npm run build
+
+# Start production server
+npm run start
 ```
 
 ---
 
-## Upcoming Phases
+## Preserved Roadmap
 
-- **Phase 03**: Supabase Storage buckets, media upload pipeline (images ≤ 5MB, videos ≤ 20MB), and reserve quota checks.
-- **Phase 04**: Google Gemini 2.5 Flash automated toxicity screening, Sharp 1080×1350 feed carousel rendering, and Instagram Graph API publishing.
+- **Phase 01**: Foundation & UI/UX (Complete)
+- **Phase 02**: Supabase & Submission System (Complete)
+- **Phase 02B**: Integration & Security Hardening (Complete)
+- **Phase 03**: Media Upload & Storage Management (Upcoming)
+- **Phase 04**: Admin Dashboard Enhancement (Upcoming)
+- **Phase 05**: Gemini AI Moderation (Free Tier) (Upcoming)
+- **Phase 06**: Feed & Story Generator (Sharp) (Upcoming)
+- **Phase 07**: Instagram API Integration (Upcoming)
+- **Phase 08**: Automated Publishing & Scheduler (Upcoming)
+- **Phase 09**: Security, Testing & Production Deployment (Upcoming)

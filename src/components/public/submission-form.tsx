@@ -7,10 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { BUSINESS_RULES } from "@/lib/constants";
 import { FormSubmissionState, FormErrors } from "@/lib/types/submission";
+import { TurnstileWidget } from "@/components/public/turnstile-widget";
 
 export function SubmissionForm() {
   const [recipient, setRecipient] = React.useState("");
   const [message, setMessage] = React.useState("");
+  const [turnstileToken, setTurnstileToken] = React.useState("");
   const [formState, setFormState] = React.useState<FormSubmissionState>("idle");
   const [errors, setErrors] = React.useState<FormErrors>({});
   const [publicCode, setPublicCode] = React.useState<string | null>(null);
@@ -52,6 +54,7 @@ export function SubmissionForm() {
         body: JSON.stringify({
           recipient: recipient.trim() || undefined,
           message: message.trim(),
+          turnstileToken: turnstileToken || undefined,
         }),
       });
 
@@ -233,6 +236,12 @@ export function SubmissionForm() {
             Coming soon
           </span>
         </div>
+
+        {/* Cloudflare Turnstile Bot Defense Widget */}
+        <TurnstileWidget
+          onVerify={(token) => setTurnstileToken(token)}
+          onExpire={() => setTurnstileToken("")}
+        />
 
         {/* Submit Button (48px height on mobile for primary thumb action) */}
         <div className="pt-2">

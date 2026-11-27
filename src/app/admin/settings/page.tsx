@@ -21,7 +21,7 @@ export default async function AdminSettingsPage() {
         </div>
         {!settings.isConfigured && (
           <span className="text-xs text-[#854D0E] bg-[#FEFCE8] px-2.5 py-1 rounded border border-[#FEF08A]">
-            Local Fallback Mode
+            Service Unavailable
           </span>
         )}
       </div>
@@ -30,7 +30,7 @@ export default async function AdminSettingsPage() {
         <div className="p-3.5 bg-[#FEFCE8] border border-[#FEF08A] rounded-xl text-xs text-[#854D0E] flex items-start gap-2.5">
           <AlertCircle className="w-4 h-4 shrink-0 text-[#CA8A04] mt-0.5" />
           <p>
-            Settings are currently loaded from system constants. To enable live persistence in PostgreSQL, configure Supabase credentials in <code>.env.local</code>.
+            Dedicated Supabase database is not configured in <code>.env.local</code>. Settings cannot be loaded or persisted until live credentials are provided.
           </p>
         </div>
       )}

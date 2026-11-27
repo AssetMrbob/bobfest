@@ -34,7 +34,7 @@ export default async function AdminOverviewPage() {
           </p>
         </div>
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg text-xs text-[#171717]">
-          <span>Database: <strong className="font-semibold">{metrics.isConfigured ? "Connected (Live)" : "Local Fallback"}</strong></span>
+          <span>Database: <strong className="font-semibold">{metrics.isConfigured ? "Connected (Live)" : "Service Unavailable"}</strong></span>
         </div>
       </div>
 

@@ -98,8 +98,16 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
     <div className="space-y-4 sm:space-y-6">
       {/* Configuration Status Notice */}
       {!isConfigured && (
-        <div className="p-3 bg-[#FEFCE8] border border-[#FEF08A] rounded-xl text-xs text-[#854D0E] flex items-center justify-between">
-          <span>Operating in local fallback mode. Populate Supabase credentials in <code>.env.local</code> to persist changes.</span>
+        <div className="p-3.5 bg-[#FEFCE8] border border-[#FEF08A] rounded-xl text-xs text-[#854D0E] flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-[#CA8A04] mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-semibold text-[#713F12]">
+              Database Service Unavailable
+            </p>
+            <p>
+              Dedicated BOBFESS Supabase database credentials are not configured in <code>.env.local</code>. No simulated or mock submissions are displayed.
+            </p>
+          </div>
         </div>
       )}
 
@@ -154,9 +162,13 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
       {filteredSubmissions.length === 0 ? (
         <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-8 sm:p-12 text-center">
           <Filter className="w-6 h-6 mx-auto text-[#A3A3A3] mb-2" />
-          <h3 className="text-sm font-semibold text-[#171717]">No submissions found</h3>
+          <h3 className="text-sm font-semibold text-[#171717]">
+            {!isConfigured ? "Database Connection Required" : "No submissions found"}
+          </h3>
           <p className="text-xs text-[#737373] mt-1">
-            Try adjusting your search terms or filter selection.
+            {!isConfigured
+              ? "Live submissions will be displayed here once dedicated Supabase credentials are configured in .env.local."
+              : "Try adjusting your search terms or filter selection."}
           </p>
         </div>
       ) : (

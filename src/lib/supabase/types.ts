@@ -308,6 +308,45 @@ export interface Database {
         };
         Relationships: [];
       };
+      rate_limits: {
+        Row: {
+          id: string;
+          client_hash: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_hash: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_hash?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      idempotency_keys: {
+        Row: {
+          key: string;
+          public_code: string;
+          created_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          key: string;
+          public_code: string;
+          created_at?: string;
+          expires_at: string;
+        };
+        Update: {
+          key?: string;
+          public_code?: string;
+          created_at?: string;
+          expires_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -316,6 +355,19 @@ export interface Database {
       is_admin: {
         Args: Record<PropertyKey, never>;
         Returns: boolean;
+      };
+      check_and_record_rate_limit: {
+        Args: {
+          p_client_hash: string;
+          p_max_requests?: number;
+          p_window_interval?: string;
+        };
+        Returns: {
+          allowed: boolean;
+          current_count: number;
+          remaining: number;
+          reset_seconds: number;
+        }[];
       };
     };
     Enums: {

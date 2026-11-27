@@ -8,8 +8,8 @@ import { Lock, ArrowLeft, AlertCircle, ShieldCheck } from "lucide-react";
 import { signInAdmin } from "@/app/admin/actions";
 
 export default function AdminLoginPage() {
-  const [email, setEmail] = React.useState("admin@menfess.id");
-  const [password, setPassword] = React.useState("admin12345");
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 

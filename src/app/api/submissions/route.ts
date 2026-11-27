@@ -5,17 +5,28 @@ import {
   generatePublicCode,
 } from "@/lib/security/content-filter";
 import {
-  getClientHash,
-  checkRateLimit,
-  checkIdempotency,
-  setIdempotency,
+  getClientHmac,
+  checkRateLimitPersistent,
+  checkIdempotencyPersistent,
+  setIdempotencyPersistent,
 } from "@/lib/security/rate-limit";
 import { verifyTurnstileToken } from "@/lib/security/turnstile";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Request payload size check (max 10KB for text submission)
+    // 1. Verify that database is configured; fail closed with 503 if unconfigured
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !serviceRoleKey || supabaseUrl.includes("placeholder") || supabaseUrl.includes("your-project")) {
+      return NextResponse.json(
+        { error: "Submission service is currently unavailable. Database connection is not configured." },
+        { status: 503 }
+      );
+    }
+
+    // 2. Request payload size check (max 10KB)
     const contentLength = request.headers.get("content-length");
     if (contentLength && parseInt(contentLength, 10) > 10240) {
       return NextResponse.json(
@@ -34,13 +45,17 @@ export async function POST(request: NextRequest) {
 
     const { message, recipient, turnstileToken, idempotencyKey } = body;
 
-    // 2. Client identification & Rate Limiting
+    // 3. Client identification (HMAC-SHA256 with server secret, never storing raw IP)
     const forwardedFor = request.headers.get("x-forwarded-for") || "";
     const ip = forwardedFor.split(",")[0].trim() || "127.0.0.1";
     const userAgent = request.headers.get("user-agent") || "unknown";
-    const clientHash = getClientHash(ip, userAgent);
+    const clientHmac = getClientHmac(ip, userAgent);
 
-    const rateLimit = checkRateLimit(clientHash, 5, 10 * 60 * 1000);
+    // Initialize privileged admin client for server-side evaluation
+    const supabase = createAdminSupabaseClient();
+
+    // 4. Persistent Database-Backed Rate Limiting
+    const rateLimit = await checkRateLimitPersistent(supabase, clientHmac, 5, 10);
     if (!rateLimit.success) {
       return NextResponse.json(
         {
@@ -55,7 +70,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Turnstile bot protection check
+    // 5. Cloudflare Turnstile bot verification
     const turnstileCheck = await verifyTurnstileToken(turnstileToken, ip);
     if (!turnstileCheck.success) {
       return NextResponse.json(
@@ -64,7 +79,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Content Validation & Normalization (500 chars, PII rejection)
+    // 6. Content Validation & Normalization (500 chars, PII detection)
     const contentCheck = validateAndNormalizeContent(message, recipient);
     if (!contentCheck.valid) {
       return NextResponse.json(
@@ -73,15 +88,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Idempotency Check (prevent duplicate clicks)
+    // 7. Persistent Idempotency Check (prevent duplicate inserts on network retries)
     const effectiveIdempotencyKey =
       typeof idempotencyKey === "string" && idempotencyKey.length > 0
         ? idempotencyKey
         : createHash("sha256")
-            .update(`${clientHash}:${contentCheck.normalizedMessage}:${contentCheck.normalizedRecipient || ""}`)
+            .update(`${clientHmac}:${contentCheck.normalizedMessage}:${contentCheck.normalizedRecipient || ""}`)
             .digest("hex");
 
-    const existingPublicCode = checkIdempotency(effectiveIdempotencyKey);
+    const existingPublicCode = await checkIdempotencyPersistent(supabase, effectiveIdempotencyKey);
     if (existingPublicCode) {
       return NextResponse.json({
         success: true,
@@ -91,34 +106,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const publicCode = generatePublicCode();
-
-    // 6. Database Insertion
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey || supabaseUrl.includes("placeholder")) {
-      // Supabase is not configured yet in local environment.
-      // Save in idempotency map and return clean response explaining the credentials state
-      setIdempotency(effectiveIdempotencyKey, publicCode);
-
-      return NextResponse.json({
-        success: true,
-        publicCode,
-        status: "pending",
-        message: "Your message is awaiting moderation. (Local mode: Supabase credentials pending in .env.local)",
-      });
-    }
-
-    // Insert into real Supabase Database via privileged admin client
-    const supabase = createAdminSupabaseClient();
-
-    // Verify app_settings allows submissions
+    // 8. Verify app_settings allows incoming submissions
     const { data: settings } = await supabase
       .from("app_settings")
       .select("accept_submissions, max_message_length")
       .eq("id", "global")
-      .single();
+      .maybeSingle();
 
     if (settings && !settings.accept_submissions) {
       return NextResponse.json(
@@ -127,6 +120,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const publicCode = generatePublicCode();
+
+    // 9. Real Database Insertion
     const { data: inserted, error: dbError } = await supabase
       .from("submissions")
       .insert({
@@ -147,10 +143,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Record idempotency
-    setIdempotency(effectiveIdempotencyKey, inserted.public_code);
+    // 10. Persist idempotency key
+    await setIdempotencyPersistent(supabase, effectiveIdempotencyKey, inserted.public_code, 60);
 
-    // Audit log
+    // 11. Write audit log (zero credentials, zero raw IPs)
     await supabase.from("system_logs").insert({
       event_type: "submission_created",
       severity: "info",

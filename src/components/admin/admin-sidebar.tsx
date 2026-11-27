@@ -27,7 +27,7 @@ export function AdminSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex flex-col w-60 bg-[#FFFFFF] border-r border-[#E5E7EB] shrink-0 min-h-screen">
+    <aside className="hidden md:flex flex-col w-60 bg-[#FFFFFF] border-r border-[#E5E7EB] shrink-0 min-h-dvh">
       {/* Brand Header */}
       <div className="h-14 px-6 flex items-center border-b border-[#E5E7EB] justify-between">
         <Link href="/admin" className="text-base font-semibold tracking-tight text-[#171717]">
@@ -61,11 +61,11 @@ export function AdminSidebar() {
         })}
       </nav>
 
-      {/* Mock Indicator & Public Link */}
+      {/* Portal Status & Public Link */}
       <div className="p-4 border-t border-[#E5E7EB] space-y-3">
         <div className="flex items-start gap-2 p-2 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg text-[11px] text-[#737373]">
           <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-[#2563EB] mt-0.5" />
-          <span>Phase 01 Mock Interface. No live DB connections.</span>
+          <span>Protected Portal · Supabase Auth & RLS Enforced</span>
         </div>
         <Link
           href="/"
