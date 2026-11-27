@@ -320,14 +320,10 @@
 
 ### 1. Database Migration Status
 - Migration file: `supabase/migrations/20261128000005_phase06_multi_slide_templates.sql`
-- **Execution Status**: `MANUAL SETUP REQUIRED` (Requires executing in Supabase SQL Editor by project administrator).
-- Verified schema structures:
-  - `submission_slides`: supports ordered slides (order 1, 2) with FK to `submissions(id)`.
-  - `templates`: stores template layout definitions with bounding box coordinates (`message_box`, `media_box`, `recipient_box`, `code_box`).
-  - `template_versions`: stores immutable version snapshots.
-  - `media_assets.slide_id`: links attachments directly to specific slides.
-  - `publication_batches.submission_id`: enforces strict 1:1 relationship between a publication and a single Menfess submission.
-  - RLS & Least-Privilege Grants: anon access denied; authenticated admins have select/manage; service_role has full access.
+- **Execution Status**: `PASSED` (Successfully applied to live Supabase project `eohewlbzyceoiwtoysyc`).
+- Verified live tables: `submission_slides`, `templates`, `template_versions`, `publication_batches`, and `media_assets.slide_id`.
+- Verified constraints: foreign key cascading, unique slide ordering per submission, and maximum 2 slides per submission.
+- Verified RLS policies & grants: anonymous clients blocked from reading templates or slides; authenticated admins manage templates; service role full access.
 
 ### 2. Complete Custom Template Workflow
 - Upload actions implemented for Feed backgrounds (1080×1350), Story backgrounds (1080×1920), photo overlays, and custom TTF/OTF fonts in `src/app/admin/template-actions.ts`.
