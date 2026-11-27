@@ -136,6 +136,8 @@ export interface Database {
           storage_capacity_limit_percent: number;
           storage_warning_percent: number;
           storage_cleanup_target_percent: number;
+          moderation_mode?: string;
+          daily_ai_request_budget?: number;
           updated_at: string;
         };
         Insert: {
@@ -153,6 +155,8 @@ export interface Database {
           storage_capacity_limit_percent?: number;
           storage_warning_percent?: number;
           storage_cleanup_target_percent?: number;
+          moderation_mode?: string;
+          daily_ai_request_budget?: number;
           updated_at?: string;
         };
         Update: {
@@ -170,6 +174,8 @@ export interface Database {
           storage_capacity_limit_percent?: number;
           storage_warning_percent?: number;
           storage_cleanup_target_percent?: number;
+          moderation_mode?: string;
+          daily_ai_request_budget?: number;
           updated_at?: string;
         };
         Relationships: [];

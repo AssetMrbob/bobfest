@@ -6,8 +6,8 @@ import { SubmissionStatus } from "@/lib/supabase/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { Search, Filter, Check, X, Clock, AlertTriangle, Eye, HelpCircle, CheckSquare, Square } from "lucide-react";
-import { moderateSubmission, bulkModerateSubmissions, getAdminMediaSignedUrl } from "@/app/admin/actions";
+import { Search, Filter, Check, X, Clock, AlertTriangle, Eye, HelpCircle, CheckSquare, Square, Sparkles, RefreshCw } from "lucide-react";
+import { moderateSubmission, bulkModerateSubmissions, getAdminMediaSignedUrl, retrySubmissionModeration, triggerModerationWorker } from "@/app/admin/actions";
 
 interface AdminSubmissionItem {
   id: string;
@@ -195,8 +195,24 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
             Review incoming submissions and assign them to the publishing queue.
           </p>
         </div>
-        <div className="text-xs text-[#737373]">
-          Showing {filteredSubmissions.length} of {submissions.length} messages
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              setIsSubmitting(true);
+              await triggerModerationWorker(10);
+              setIsSubmitting(false);
+              window.location.reload();
+            }}
+            disabled={isSubmitting}
+            className="px-3 py-1.5 bg-[#EFF6FF] text-[#2563EB] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded-lg text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            title="Run Gemini Moderation Worker on unreviewed messages"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Run AI Moderation</span>
+          </button>
+          <div className="text-xs text-[#737373]">
+            Showing {filteredSubmissions.length} of {submissions.length} messages
+          </div>
         </div>
       </div>
 
@@ -637,6 +653,23 @@ export function InboxClient({ initialSubmissions, isConfigured }: InboxClientPro
               </span>
 
               <div className="grid grid-cols-2 sm:flex gap-2">
+                <Button
+                  size="md"
+                  variant="outline"
+                  onClick={async () => {
+                    if (selectedSubmission.rawId) {
+                      setIsSubmitting(true);
+                      await retrySubmissionModeration(selectedSubmission.rawId);
+                      setIsSubmitting(false);
+                      window.location.reload();
+                    }
+                  }}
+                  disabled={isSubmitting}
+                  className="w-full sm:w-auto text-xs inline-flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Re-evaluate AI</span>
+                </Button>
                 <Button
                   size="md"
                   variant="outline"

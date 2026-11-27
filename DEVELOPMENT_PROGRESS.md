@@ -172,3 +172,78 @@
 | **Build & Lint** | ESLint | 0 errors (`npm run lint`) | 0 errors | **PASSED** |
 | **Build & Lint** | Production Build | Turbopack compilation with PPR & Cache Components | Compiled successfully (13 routes) | **PASSED** |
 | **Live Database** | Schema, Batches, and Logs Test | Verify operations against dedicated Supabase DB | Verified with 0 residual test records | **PASSED** |
+
+---
+
+## Phase 05 Completed Milestones — Gemini AI Moderation
+
+### 1. Official Google Gen AI SDK Integration
+- [x] Installed official `@google/genai` SDK package.
+- [x] Configured server-only environment variables: `GEMINI_API_KEY` and configurable `GEMINI_MODEL` (default: `gemini-2.5-flash-lite`, Free Tier available).
+- [x] Implemented API key protection (strictly server-side, never exposed to client).
+- [x] Structured JSON Schema response validation via `responseMimeType: "application/json"` and `responseJsonSchema`.
+- [x] Verified live connectivity using non-sensitive synthetic prompts.
+
+### 2. Privacy-First Local Gatekeeper
+- [x] Created `src/lib/gemini/privacy-filter.ts`:
+  - Enforced detection for email addresses, phone numbers / WhatsApp links, Indonesian National IDs (NIK / KTP), bank account numbers, and social media handles.
+  - Intercepted submissions containing personal contact information before transferring to external Gemini Free Tier.
+  - Submissions with media attachments automatically require manual human review.
+  - Sensitive confidential allegations routed directly to manual review.
+  - Prompt injection pattern detection.
+
+### 3. Moderation Classification & Decision Rules
+- [x] Created `src/lib/gemini/moderation-service.ts`:
+  - Classifies eligible content into: `approved`, `needs_review`, `rejected`.
+  - Structured fields: `decision`, `risk_level`, `category`, `reason_code`, `short_reason`, `detected_flags`, `requires_human_review`, `model_version`, `tokens_used`.
+  - Supported flags: `spam`, `harassment`, `bullying`, `sexual_content`, `hate_speech`, `threats`, `violence`, `self_harm`, `personal_information`, `impersonation`, `defamatory_allegations`, `inappropriate_language`, `prompt_injection`, `unclear_context`.
+  - Supports Indonesian, English, mixed-language slang (Jaksel), and common abbreviations.
+  - Strict rule: Constructive criticism is routed to `needs_review`, never rejected solely for being negative.
+
+### 4. Moderation Modes & Durable Worker
+- [x] Implemented 3 configurable moderation modes:
+  - `SMART_AUTOMATIC`: Clearly safe, low-risk confessions that pass every filter may be queued automatically.
+  - `AI_ASSISTED` (Default): Gemini recommends decisions with notes, but administrator approval is required.
+  - `MANUAL`: Bypasses external AI calls; all submissions enter manual review.
+- [x] Created `src/lib/gemini/moderation-worker.ts`:
+  - Submission persisted before moderation starts.
+  - Concurrency-safe leases using PostgreSQL atomic updates with `moderation_status = 'in_review'`.
+  - Protects human admin decisions against delayed AI overwrites.
+  - Daily request budget safety ceiling (default 50 requests/day).
+  - Bounded exponential backoff and fail-closed fallback to `needs_review` on error.
+  - Audit logging to `system_logs` and `moderation_logs`.
+
+### 5. Admin Dashboard Integration
+- [x] **Settings Page** ([settings/page.tsx](file:///Users/Mr.Bob/WEBSITE%20BARU/BOBFESS/src/app/admin/settings/page.tsx)):
+  - Live Gemini connection indicator & model display.
+  - Moderation mode switcher (`AI_ASSISTED`, `SMART_AUTOMATIC`, `MANUAL`).
+  - Internal daily AI request budget setting.
+  - Today AI requests counter and error display.
+- [x] **Inbox Page** ([inbox-client.tsx](file:///Users/Mr.Bob/WEBSITE%20BARU/BOBFESS/src/app/admin/inbox/inbox-client.tsx)):
+  - "Run AI Moderation" batch worker button in header.
+  - Per-item "Re-evaluate AI" action in detail modal.
+  - AI decision notes and flags displayed on submission cards.
+
+---
+
+## Phase 05 Test Results & Verification Matrix
+
+| Category | Test Scenario | Expected Outcome | Actual Result | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Privacy Gatekeeper** | Personal phone number / WA | Block transmission to Gemini | Intercepted locally | **PASSED** |
+| **Privacy Gatekeeper** | Commercial spam link | Block transmission to Gemini | Intercepted locally | **PASSED** |
+| **Privacy Gatekeeper** | Media attachment uploaded | Require human review | Intercepted locally | **PASSED** |
+| **Live Gemini API** | Safe Indonesian message | Decision: `approved` | `approved` (Risk: low) | **PASSED** |
+| **Live Gemini API** | Safe English message | Decision: `approved` | `approved` (Risk: low) | **PASSED** |
+| **Live Gemini API** | Mixed Jaksel slang message | Decision: `approved` | `approved` (Risk: low) | **PASSED** |
+| **Live Gemini API** | Constructive criticism | Decision: `needs_review` | `needs_review` (not rejected) | **PASSED** |
+| **Live Gemini API** | Explicit harassment / slur | Decision: `rejected` | `rejected` (Risk: high) | **PASSED** |
+| **Live Gemini API** | Physical violence threat | Decision: `rejected` | `rejected` (Risk: critical) | **PASSED** |
+| **Live Gemini API** | Ambiguous allegation | Decision: `needs_review` | `needs_review` (Risk: medium)| **PASSED** |
+| **Live Gemini API** | Prompt injection attempt | Decision: `rejected` / `needs_review` | `rejected` (jailbreak flagged) | **PASSED** |
+| **Concurrency & Safety**| Duplicate claim prevention | Block second worker from same item | Concurrency blocked | **PASSED** |
+| **Manual Override** | Admin decision takes precedence | Prevent delayed AI overwrite | Admin decision preserved | **PASSED** |
+| **Quota Accounting** | Daily budget check | Route to `needs_review` if budget reached | Bounded ceiling verified | **PASSED** |
+| **Build & Lint** | Strict TypeScript check | 0 errors (`npx tsc --noEmit`) | 0 errors | **PASSED** |
+| **Build & Lint** | ESLint | 0 errors (`npm run lint`) | 0 errors | **PASSED** |
+| **Build & Lint** | Production Build | Compile all routes with Turbopack & PPR | Compiled successfully (13 routes) | **PASSED** |

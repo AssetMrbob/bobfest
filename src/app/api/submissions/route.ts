@@ -12,6 +12,7 @@ import {
 } from "@/lib/security/rate-limit";
 import { verifyTurnstileToken } from "@/lib/security/turnstile";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { processSubmissionModeration } from "@/lib/gemini/moderation-worker";
 
 export async function POST(request: NextRequest) {
   try {
@@ -239,6 +240,13 @@ export async function POST(request: NextRequest) {
         recipient_present: Boolean(contentCheck.normalizedRecipient),
       },
     });
+
+    // 12. Trigger background moderation (Durable: submission already safely persisted)
+    try {
+      await processSubmissionModeration(inserted.id);
+    } catch (modErr) {
+      console.error("Non-fatal background moderation trigger error:", modErr);
+    }
 
     return NextResponse.json({
       success: true,

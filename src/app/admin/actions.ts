@@ -7,6 +7,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { SubmissionStatus } from "@/lib/supabase/types";
 import { getStorageLedgerMetrics, reconcileBucketStorage, runFifoStorageCleanup } from "@/lib/storage/storage-manager";
+import { isGeminiConfigured, getGeminiModelName } from "@/lib/gemini/moderation-service";
+import { getAiQuotaUsage, processSubmissionModeration, runPendingModerationWorker } from "@/lib/gemini/moderation-worker";
 
 /**
  * Checks if real Supabase credentials are configured in the environment.
@@ -130,9 +132,9 @@ export async function getDashboardMetrics(dateRange: "today" | "7d" | "30d" | "a
           statusText: "Not connected",
         },
         geminiModeration: {
-          name: "Gemini 2.5 Flash",
-          connected: false,
-          statusText: "Reserved (Phase 05)",
+          name: `Gemini (${getGeminiModelName()})`,
+          connected: isGeminiConfigured(),
+          statusText: isGeminiConfigured() ? "Operational (Free Tier)" : "Not configured",
         },
         instagramGraph: {
           name: "Instagram Graph API",
@@ -211,9 +213,9 @@ export async function getDashboardMetrics(dateRange: "today" | "7d" | "30d" | "a
           statusText: "Operational (bobfess-images & bobfess-videos)",
         },
         geminiModeration: {
-          name: "Gemini 2.5 Flash",
-          connected: false,
-          statusText: "Reserved (Phase 05)",
+          name: `Gemini (${getGeminiModelName()})`,
+          connected: isGeminiConfigured(),
+          statusText: isGeminiConfigured() ? "Operational (Free Tier)" : "Not configured",
         },
         instagramGraph: {
           name: "Instagram Graph API",
@@ -468,6 +470,9 @@ export async function saveAppSettings(formData: FormData) {
 
   const acceptSubmissions = formData.get("accept_submissions") === "true";
   const autoPublishEnabled = formData.get("auto_publish_enabled") === "true";
+  const moderationMode = formData.get("moderation_mode")?.toString() || "AI_ASSISTED";
+  const dailyBudgetStr = formData.get("daily_ai_request_budget")?.toString() || "50";
+  const dailyBudget = Math.max(1, parseInt(dailyBudgetStr, 10) || 50);
 
   const supabase = createAdminSupabaseClient();
   const { error } = await supabase
@@ -475,6 +480,8 @@ export async function saveAppSettings(formData: FormData) {
     .update({
       accept_submissions: acceptSubmissions,
       auto_publish_enabled: autoPublishEnabled,
+      moderation_mode: moderationMode,
+      daily_ai_request_budget: dailyBudget,
     })
     .eq("id", "global");
 
@@ -862,4 +869,56 @@ export async function getSystemLogs(category?: string, limit = 50) {
     console.error("System logs error:", err);
     return { isConfigured: false, logs: [] };
   }
+}
+
+/**
+ * Triggers moderation worker for pending submissions.
+ */
+export async function triggerModerationWorker(maxJobs: number = 5) {
+  const configured = await isSupabaseConfigured();
+  if (!configured) return { error: "Database not configured." };
+
+  const supabaseUser = await createServerSupabaseClient();
+  const { data: { user } } = await supabaseUser.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const res = await runPendingModerationWorker(maxJobs);
+  revalidatePath("/admin/inbox");
+  revalidatePath("/admin");
+  return { success: true, processed: res.processed };
+}
+
+/**
+ * Triggers AI moderation for a single submission.
+ */
+export async function retrySubmissionModeration(submissionId: string) {
+  const configured = await isSupabaseConfigured();
+  if (!configured) return { error: "Database not configured." };
+
+  const supabaseUser = await createServerSupabaseClient();
+  const { data: { user } } = await supabaseUser.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  // Reset moderation_status to unreviewed and status to pending to allow re-evaluation
+  const supabase = createAdminSupabaseClient();
+  await supabase
+    .from("submissions")
+    .update({
+      status: "pending",
+      moderation_status: "unreviewed",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", submissionId);
+
+  const res = await processSubmissionModeration(submissionId);
+  revalidatePath("/admin/inbox");
+  revalidatePath("/admin");
+  return res;
+}
+
+/**
+ * Fetches AI Quota status for admin settings / overview.
+ */
+export async function getAiQuotaStatus() {
+  return await getAiQuotaUsage();
 }
