@@ -1,6 +1,7 @@
 import sharp, { OverlayOptions } from "sharp";
 import { CustomTemplate, BoundingBox, LayerElementConfig } from "@/lib/types/template";
 import { loadParsedFont, measureTextWidth } from "./font-manager";
+import { Font } from "opentype.js";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 /**
@@ -30,7 +31,7 @@ export interface TextLayoutResult {
  * Performs deterministic auto-fit from font_size_max down to font_size_min.
  */
 export function layoutTextWithGlyphMeasurement(
-  font: import("opentype.js").Font,
+  font: Font,
   text: string,
   box: BoundingBox | LayerElementConfig,
   minFontSize: number = 24,

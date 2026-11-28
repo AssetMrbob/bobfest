@@ -1,10 +1,10 @@
-import opentype from "opentype.js";
+import { parse, Font } from "opentype.js";
 import fs from "fs";
 import path from "path";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 // In-memory cache for parsed fonts (key: font path or buffer hash)
-const fontCache = new Map<string, opentype.Font>();
+const fontCache = new Map<string, Font>();
 const fontBufferCache = new Map<string, Buffer>();
 
 /**
@@ -86,7 +86,7 @@ export async function getFontBuffer(fontFilePath: string | null | undefined): Pr
  * Loads and parses an opentype.js Font instance.
  */
 export async function loadParsedFont(fontFilePath: string | null | undefined): Promise<{
-  font: opentype.Font;
+  font: Font;
   fontBuffer: Buffer;
   fontFamily: string;
 }> {
@@ -101,7 +101,7 @@ export async function loadParsedFont(fontFilePath: string | null | undefined): P
 
   const { buffer, fontFamily } = await getFontBuffer(fontFilePath);
   const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
-  const font = opentype.parse(arrayBuffer);
+  const font = parse(arrayBuffer);
 
   fontCache.set(cacheKey, font);
   fontBufferCache.set(cacheKey, buffer);
@@ -113,7 +113,7 @@ export async function loadParsedFont(fontFilePath: string | null | undefined): P
  * Measures the exact width of a text string at a given fontSize and letterSpacing using opentype glyph measurement.
  */
 export function measureTextWidth(
-  font: opentype.Font,
+  font: Font,
   text: string,
   fontSize: number,
   letterSpacing: number = 0
