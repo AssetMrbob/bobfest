@@ -1,5 +1,7 @@
 "use server";
 
+import { assertAdminSession } from "@/lib/security/admin-auth";
+
 import { revalidatePath } from "next/cache";
 import { verifyInstagramConnection, syncInstagramUsername } from "@/lib/instagram/instagram-service";
 import { verifyThreadsConnection, refreshThreadsToken, syncThreadsUsername } from "@/lib/threads/threads-service";
@@ -13,6 +15,7 @@ import { formatThreadsPayload } from "@/lib/threads/threads-formatter";
  * Read-only, no publishing.
  */
 export async function testInstagramConnectionAction() {
+  await assertAdminSession();
   const result = await verifyInstagramConnection();
   return result;
 }
@@ -21,6 +24,7 @@ export async function testInstagramConnectionAction() {
  * Synchronizes Instagram username after detected rename on platform.
  */
 export async function syncInstagramUsernameAction(newUsername: string) {
+  await assertAdminSession();
   const success = await syncInstagramUsername(newUsername);
   revalidatePath("/admin/settings");
   return { success };
@@ -31,6 +35,7 @@ export async function syncInstagramUsernameAction(newUsername: string) {
  * Read-only, no publishing.
  */
 export async function testThreadsConnectionAction() {
+  await assertAdminSession();
   const result = await verifyThreadsConnection();
   return result;
 }
@@ -39,6 +44,7 @@ export async function testThreadsConnectionAction() {
  * Synchronizes Threads username after detected rename on platform.
  */
 export async function syncThreadsUsernameAction(newUsername: string) {
+  await assertAdminSession();
   const success = await syncThreadsUsername(newUsername);
   revalidatePath("/admin/settings");
   return { success };
@@ -48,6 +54,7 @@ export async function syncThreadsUsernameAction(newUsername: string) {
  * Gets dynamic brand settings.
  */
 export async function getBrandSettingsAction() {
+  await assertAdminSession();
   return await getBrandSettings();
 }
 
@@ -55,6 +62,7 @@ export async function getBrandSettingsAction() {
  * Updates dynamic brand settings.
  */
 export async function updateBrandSettingsAction(data: Partial<BrandSettings>) {
+  await assertAdminSession();
   const success = await updateBrandSettings(data);
   revalidatePath("/admin/settings");
   revalidatePath("/");
@@ -65,6 +73,7 @@ export async function updateBrandSettingsAction(data: Partial<BrandSettings>) {
  * Refreshes the Threads long-lived access token.
  */
 export async function refreshThreadsTokenAction() {
+  await assertAdminSession();
   const result = await refreshThreadsToken();
   revalidatePath("/admin/settings");
   return result;
@@ -82,6 +91,7 @@ export async function updateSocialSettingsAction(data: {
   threadsSuffix: string;
   threadsShowRefCode: boolean;
 }) {
+  await assertAdminSession();
   const adminClient = createAdminSupabaseClient();
   const { error } = await adminClient.from("app_settings").update({
     instagram_feed_enabled: data.instagramFeedEnabled,
@@ -102,6 +112,7 @@ export async function updateSocialSettingsAction(data: {
  * Runs a dry-run test of multi-platform payload preparation and validation.
  */
 export async function dryRunPublishBatchAction(batchId: string) {
+  await assertAdminSession();
   try {
     const report = await executeMultiPlatformPublishing({
       batchId,
@@ -119,6 +130,7 @@ export async function dryRunPublishBatchAction(batchId: string) {
  * formatThreadsPayload.
  */
 export async function previewBatchThreadsPayloadAction(batchId: string) {
+  await assertAdminSession();
   try {
     const adminClient = createAdminSupabaseClient();
     const { data: batch, error: bErr } = await adminClient
@@ -183,6 +195,7 @@ export async function previewCustomThreadsPayloadAction(params: {
   suffix?: string;
   showRefCode?: boolean;
 }) {
+  await assertAdminSession();
   const payload = formatThreadsPayload({
     submission: {
       public_code: params.publicCode || "KI-SAMPLE",

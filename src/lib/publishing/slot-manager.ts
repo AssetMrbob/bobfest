@@ -94,7 +94,6 @@ export async function reservePublicationSlot(params: {
   const adminClient = createAdminSupabaseClient();
 
   try {
-    // 1. Try atomic database function if migration has run
     const { data, error } = await adminClient.rpc("reserve_publication_slot_atomic", {
       p_wib_date: params.wibDate,
       p_slot_time: params.slotTime,
@@ -108,75 +107,7 @@ export async function reservePublicationSlot(params: {
       }
       return { success: false, error: data.error };
     }
-  } catch {
-    // Fallback below
-  }
-
-  // 2. Direct transactional/table checks fallback
-  try {
-    // Check if slot table exists and query it
-    const { data: existingSlot, error: slotErr } = await adminClient
-      .from("publication_slots")
-      .select("*")
-      .eq("wib_date", params.wibDate)
-      .eq("slot_time", params.slotTime)
-      .neq("status", "cancelled")
-      .maybeSingle();
-
-    if (!slotErr && existingSlot) {
-      return {
-        success: false,
-        error: `Slot ${params.slotTime} on ${params.wibDate} is already reserved by batch ${existingSlot.batch_id}`,
-      };
-    }
-
-    // Check submission identity
-    const { data: existingSub, error: subErr } = await adminClient
-      .from("publication_slots")
-      .select("*")
-      .eq("submission_id", params.submissionId)
-      .neq("status", "cancelled")
-      .maybeSingle();
-
-    if (!subErr && existingSub) {
-      return {
-        success: false,
-        error: `Submission ${params.submissionId} is already assigned to a publication slot`,
-      };
-    }
-
-    // Check count for day
-    const { count, error: countErr } = await adminClient
-      .from("publication_slots")
-      .select("id", { count: "exact", head: true })
-      .eq("wib_date", params.wibDate)
-      .neq("status", "cancelled");
-
-    if (!countErr && count !== null && count >= 2) {
-      return {
-        success: false,
-        error: `Daily limit of 2 publication batches already reached for date ${params.wibDate}`,
-      };
-    }
-
-    // Try inserting
-    const { error: insertErr } = await adminClient.from("publication_slots").insert({
-      wib_date: params.wibDate,
-      slot_time: params.slotTime,
-      batch_id: params.batchId,
-      submission_id: params.submissionId,
-      status: "reserved",
-    });
-
-    if (insertErr) {
-      // If table doesn't exist yet, we check publication_batches count as ultimate fallback
-      if (insertErr.code === "42P01") {
-        return { success: true };
-      }
-      return { success: false, error: insertErr.message };
-    }
-
-    return { success: true };
+    return { success: false, error: error?.message || "Slot reservation RPC returned no data" };
   } catch (err) {
     return { success: false, error: (err as Error).message };
   }

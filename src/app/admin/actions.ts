@@ -1,5 +1,7 @@
 "use server";
 
+import { assertAdminSession } from "@/lib/security/admin-auth";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -95,6 +97,7 @@ export async function signOutAdmin() {
  * Never returns fabricated or mock data.
  */
 export async function getDashboardMetrics(dateRange: "today" | "7d" | "30d" | "all" = "all") {
+  await assertAdminSession();
   await connection();
   const configured = await isSupabaseConfigured();
 
@@ -298,6 +301,7 @@ export async function getAdminSubmissions(params: {
   limit?: number;
   offset?: number;
 }) {
+  await assertAdminSession();
   const { status = "all", query = "", limit = 50, offset = 0 } = params;
   const configured = await isSupabaseConfigured();
 
@@ -377,6 +381,7 @@ export async function moderateSubmission(
   newStatus: SubmissionStatus,
   reason?: string
 ) {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
 
   if (!configured) {
@@ -430,6 +435,7 @@ export async function moderateSubmission(
  * Fetch and update application settings
  */
 export async function getAppSettings() {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) {
     return {
@@ -466,6 +472,7 @@ export async function getAppSettings() {
 }
 
 export async function saveAppSettings(formData: FormData) {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) {
     return { error: "Service unavailable: Database connection is not configured." };
@@ -502,6 +509,7 @@ export async function saveAppSettings(formData: FormData) {
  * Strictly verifies admin role server-side.
  */
 export async function getAdminMediaSignedUrl(storagePath: string): Promise<{ signedUrl?: string; error?: string }> {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) {
     return { error: "Database not configured." };
@@ -556,6 +564,7 @@ export async function getAdminMediaSignedUrl(storagePath: string): Promise<{ sig
  * Server action to trigger storage reconciliation from admin panel.
  */
 export async function triggerStorageReconciliation() {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) return { error: "Database not configured." };
 
@@ -573,6 +582,7 @@ export async function triggerStorageReconciliation() {
  * Server action to trigger safe FIFO storage cleanup from admin panel.
  */
 export async function triggerStorageCleanup(targetBytes = 20971520) {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) return { error: "Database not configured." };
 
@@ -594,6 +604,7 @@ export async function bulkModerateSubmissions(
   newStatus: SubmissionStatus,
   reason?: string
 ): Promise<{ success: boolean; count?: number; error?: string }> {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) return { success: false, error: "Database not configured." };
 
@@ -654,6 +665,7 @@ export async function bulkModerateSubmissions(
  * Queue Management: Fetch scheduled batches and queued submissions.
  */
 export async function getPublishingQueue() {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) {
     return {
@@ -711,6 +723,7 @@ export async function getPublishingQueue() {
  * Queue Management: Move approved submission to queue.
  */
 export async function enqueueSubmission(submissionId: string) {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) return { error: "Database not configured." };
 
@@ -735,6 +748,7 @@ export async function enqueueSubmission(submissionId: string) {
  * Queue Management: Remove queued submission back to approved.
  */
 export async function dequeueSubmission(submissionId: string) {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) return { error: "Database not configured." };
 
@@ -763,6 +777,7 @@ export async function dequeueSubmission(submissionId: string) {
  * Each publication batch links strictly to 1 parent Menfess submission (up to 2 slides).
  */
 export async function createPublicationBatch(scheduledTime: string, submissionId: string) {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) return { error: "Database not configured." };
 
@@ -838,6 +853,7 @@ export async function createPublicationBatch(scheduledTime: string, submissionId
  * Queue Management: Cancel unpublished scheduled batch.
  */
 export async function cancelPublicationBatch(batchId: string) {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) return { error: "Database not configured." };
 
@@ -863,6 +879,7 @@ export async function cancelPublicationBatch(batchId: string) {
  * Published Archive: Fetch real published history from Supabase.
  */
 export async function getPublishedArchive() {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) return { isConfigured: false, batches: [] };
 
@@ -889,6 +906,7 @@ export async function getPublishedArchive() {
  * System Logs: Fetch real system logs with optional category filter.
  */
 export async function getSystemLogs(category?: string, limit = 50) {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) return { isConfigured: false, logs: [] };
 
@@ -919,6 +937,7 @@ export async function getSystemLogs(category?: string, limit = 50) {
  * Triggers moderation worker for pending submissions.
  */
 export async function triggerModerationWorker(maxJobs: number = 5) {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) return { error: "Database not configured." };
 
@@ -936,6 +955,7 @@ export async function triggerModerationWorker(maxJobs: number = 5) {
  * Triggers AI moderation for a single submission.
  */
 export async function retrySubmissionModeration(submissionId: string) {
+  await assertAdminSession();
   const configured = await isSupabaseConfigured();
   if (!configured) return { error: "Database not configured." };
 
@@ -964,5 +984,6 @@ export async function retrySubmissionModeration(submissionId: string) {
  * Fetches AI Quota status for admin settings / overview.
  */
 export async function getAiQuotaStatus() {
+  await assertAdminSession();
   return await getAiQuotaUsage();
 }

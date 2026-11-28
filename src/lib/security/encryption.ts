@@ -6,7 +6,10 @@ import crypto from "crypto";
  */
 
 function getEncryptionKey(): Buffer {
-  const secret = process.env.APP_SECRET || process.env.SUPABASE_SECRET_KEY || "kampung-inggris-fess-default-secret-key-32b";
+  const secret = process.env.APP_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error("APP_SECRET must be configured with at least 32 characters.");
+  }
   // Derive a consistent 32-byte key using SHA-256
   return crypto.createHash("sha256").update(secret).digest();
 }

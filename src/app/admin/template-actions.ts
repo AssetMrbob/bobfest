@@ -1,5 +1,7 @@
 "use server";
 
+import { assertAdminSession } from "@/lib/security/admin-auth";
+
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
@@ -16,6 +18,7 @@ export async function uploadTemplateAsset(formData: FormData): Promise<{
   storagePath?: string;
   error?: string;
 }> {
+  await assertAdminSession();
   const supabaseUser = await createServerSupabaseClient();
   const { data: { user } } = await supabaseUser.auth.getUser();
   if (!user) return { success: false, error: "Unauthorized. Admin session required." };
@@ -62,6 +65,7 @@ export async function saveCustomTemplate(template: CustomTemplate): Promise<{
   templateId?: string;
   error?: string;
 }> {
+  await assertAdminSession();
   const supabaseUser = await createServerSupabaseClient();
   const { data: { user } } = await supabaseUser.auth.getUser();
   if (!user) return { success: false, error: "Unauthorized. Admin session required." };
@@ -122,6 +126,7 @@ export async function getCustomTemplates(): Promise<{
   templates: CustomTemplate[];
   error?: string;
 }> {
+  await assertAdminSession();
   const adminClient = createAdminSupabaseClient();
   const { data, error } = await adminClient
     .from("templates")
@@ -147,6 +152,7 @@ export async function generatePublicationAssets(
   storyAssetUrl?: string;
   error?: string;
 }> {
+  await assertAdminSession();
   const supabaseUser = await createServerSupabaseClient();
   const { data: { user } } = await supabaseUser.auth.getUser();
   if (!user) return { success: false, error: "Unauthorized" };

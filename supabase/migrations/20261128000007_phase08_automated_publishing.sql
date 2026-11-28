@@ -133,7 +133,9 @@ CREATE OR REPLACE FUNCTION public.reserve_publication_slot_atomic(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = ''
 AS $$
+#variable_conflict use_column
 DECLARE
   v_existing_slot RECORD;
   v_existing_sub RECORD;
@@ -209,70 +211,43 @@ CREATE OR REPLACE FUNCTION public.acquire_distributed_lock_atomic(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = ''
 AS $$
+#variable_conflict use_column
 DECLARE
-  v_now TIMESTAMPTZ := now();
-  v_expires_at TIMESTAMPTZ := v_now + (p_ttl_seconds || ' seconds')::interval;
+  v_now TIMESTAMPTZ := clock_timestamp();
+  v_expires_at TIMESTAMPTZ;
+  v_fencing INT;
   v_current_lock RECORD;
-  v_new_fencing INT := 1;
 BEGIN
-  -- Look for existing lock
-  SELECT * INTO v_current_lock
-  FROM public.distributed_locks
-  WHERE lock_key = p_lock_key;
-
-  IF FOUND THEN
-    -- If expired or owned by same owner, we can renew/acquire
-    IF v_current_lock.expires_at < v_now OR v_current_lock.owner_id = p_owner_id THEN
-      v_new_fencing := v_current_lock.fencing_token + 1;
-      UPDATE public.distributed_locks
-      SET owner_id = p_owner_id,
-          fencing_token = v_new_fencing,
-          acquired_at = v_now,
-          expires_at = v_expires_at,
-          metadata = p_metadata
-      WHERE lock_key = p_lock_key;
-
-      RETURN jsonb_build_object(
-        'acquired', true,
-        'lock_key', p_lock_key,
-        'fencing_token', v_new_fencing,
-        'expires_at', v_expires_at
-      );
-    ELSE
-      -- Still held by someone else
-      RETURN jsonb_build_object(
-        'acquired', false,
-        'lock_key', p_lock_key,
-        'owner_id', v_current_lock.owner_id,
-        'expires_at', v_current_lock.expires_at
-      );
-    END IF;
-  ELSE
-    -- Lock does not exist, insert fresh
-    INSERT INTO public.distributed_locks (
-      lock_key,
-      owner_id,
-      fencing_token,
-      acquired_at,
-      expires_at,
-      metadata
-    ) VALUES (
-      p_lock_key,
-      p_owner_id,
-      1,
-      v_now,
-      v_expires_at,
-      p_metadata
-    );
-
-    RETURN jsonb_build_object(
-      'acquired', true,
-      'lock_key', p_lock_key,
-      'fencing_token', 1,
-      'expires_at', v_expires_at
-    );
+  IF p_ttl_seconds IS NULL OR p_ttl_seconds < 1 OR p_lock_key IS NULL OR p_owner_id IS NULL THEN
+    RAISE EXCEPTION 'Invalid distributed lock parameters';
   END IF;
+  v_expires_at := v_now + make_interval(secs => p_ttl_seconds);
+
+  INSERT INTO public.distributed_locks AS current_lock (
+    lock_key, owner_id, fencing_token, acquired_at, expires_at, metadata
+  ) VALUES (
+    p_lock_key, p_owner_id, 1, v_now, v_expires_at, p_metadata
+  )
+  ON CONFLICT (lock_key) DO UPDATE
+    SET owner_id = EXCLUDED.owner_id,
+        fencing_token = current_lock.fencing_token + 1,
+        acquired_at = v_now,
+        expires_at = v_expires_at,
+        metadata = EXCLUDED.metadata
+    WHERE current_lock.expires_at <= v_now OR current_lock.owner_id = p_owner_id
+  RETURNING fencing_token INTO v_fencing;
+
+  IF v_fencing IS NOT NULL THEN
+    RETURN jsonb_build_object('acquired', true, 'lock_key', p_lock_key,
+      'fencing_token', v_fencing, 'expires_at', v_expires_at);
+  END IF;
+
+  SELECT owner_id, expires_at INTO v_current_lock
+  FROM public.distributed_locks WHERE lock_key = p_lock_key;
+  RETURN jsonb_build_object('acquired', false, 'lock_key', p_lock_key,
+    'owner_id', v_current_lock.owner_id, 'expires_at', v_current_lock.expires_at);
 END;
 $$;
 
@@ -285,17 +260,22 @@ CREATE OR REPLACE FUNCTION public.release_distributed_lock_atomic(
 RETURNS BOOLEAN
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = ''
 AS $$
+#variable_conflict use_column
 DECLARE
-  v_deleted INT;
+  v_updated INT;
 BEGIN
-  DELETE FROM public.distributed_locks
+  -- Keep the row so fencing tokens never reset after release.
+  UPDATE public.distributed_locks
+  SET expires_at = clock_timestamp()
   WHERE lock_key = p_lock_key
     AND owner_id = p_owner_id
-    AND fencing_token = p_fencing_token;
+    AND fencing_token = p_fencing_token
+    AND expires_at > clock_timestamp();
 
-  GET DIAGNOSTICS v_deleted = ROW_COUNT;
-  RETURN v_deleted > 0;
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated > 0;
 END;
 $$;
 
@@ -316,7 +296,9 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = ''
 AS $$
+#variable_conflict use_column
 DECLARE
   v_now TIMESTAMPTZ := now();
   v_lease_expiry TIMESTAMPTZ := v_now + (p_lease_duration_seconds || ' seconds')::interval;
@@ -335,24 +317,24 @@ BEGIN
 
   IF v_target_id IS NOT NULL THEN
     RETURN QUERY
-    UPDATE public.queue_jobs
+    UPDATE public.queue_jobs AS q
     SET status = 'claimed',
         lease_owner = p_worker_id,
         lease_expires_at = v_lease_expiry,
-        claim_version = claim_version + 1,
+        claim_version = q.claim_version + 1,
         heartbeat_at = v_now,
-        attempt_count = attempt_count + 1,
+        attempt_count = q.attempt_count + 1,
         updated_at = v_now
-    WHERE id = v_target_id
+    WHERE q.id = v_target_id
     RETURNING
-      queue_jobs.id AS job_id,
-      queue_jobs.job_type,
-      queue_jobs.batch_id,
-      queue_jobs.submission_id,
-      queue_jobs.attempt_count,
-      queue_jobs.max_attempts,
-      queue_jobs.claim_version,
-      queue_jobs.payload;
+      q.id AS job_id,
+      q.job_type,
+      q.batch_id,
+      q.submission_id,
+      q.attempt_count,
+      q.max_attempts,
+      q.claim_version,
+      q.payload;
   END IF;
 END;
 $$;
@@ -401,30 +383,22 @@ GRANT SELECT ON public.distributed_locks TO authenticated;
 GRANT SELECT ON public.scheduler_health TO authenticated;
 
 GRANT EXECUTE ON FUNCTION public.reserve_publication_slot_atomic TO service_role;
-GRANT EXECUTE ON FUNCTION public.reserve_publication_slot_atomic TO authenticated;
+
 GRANT EXECUTE ON FUNCTION public.acquire_distributed_lock_atomic TO service_role;
-GRANT EXECUTE ON FUNCTION public.acquire_distributed_lock_atomic TO authenticated;
+
 GRANT EXECUTE ON FUNCTION public.release_distributed_lock_atomic TO service_role;
-GRANT EXECUTE ON FUNCTION public.release_distributed_lock_atomic TO authenticated;
+
 GRANT EXECUTE ON FUNCTION public.claim_next_queue_job_atomic TO service_role;
+
+-- Restrict privileged RPCs to server-side credentials only.
+REVOKE ALL ON FUNCTION public.reserve_publication_slot_atomic(DATE, VARCHAR, UUID, UUID) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.acquire_distributed_lock_atomic(VARCHAR, VARCHAR, INT, JSONB) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.release_distributed_lock_atomic(VARCHAR, VARCHAR, INT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.claim_next_queue_job_atomic(VARCHAR, INT) FROM PUBLIC, anon, authenticated;
 
 -- 12. Enforce Clean Natural Threads Publishing Defaults
 -- Default to clean, natural text without branding prefixes or tracking codes
 ALTER TABLE public.app_settings 
   ALTER COLUMN threads_show_ref_code SET DEFAULT false;
 
--- Clean existing global defaults if uncustomized
-UPDATE public.app_settings 
-SET threads_show_ref_code = false 
-WHERE id = 'global' AND threads_show_ref_code IS TRUE;
-
--- 12. Threads Publishing Format Correction: Default to clean natural text
--- Strips automatic branding prefixes, hashtags, reference codes, or promotional CTAs by default.
-ALTER TABLE public.app_settings
-  ALTER COLUMN threads_show_ref_code SET DEFAULT false;
-
-UPDATE public.app_settings
-  SET threads_show_ref_code = false,
-      threads_prefix = '',
-      threads_suffix = ''
-  WHERE id = 'global';
+-- Preserve existing administrator Threads formatting settings.

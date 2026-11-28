@@ -1,5 +1,7 @@
 "use server";
 
+import { assertAdminSession } from "@/lib/security/admin-auth";
+
 import { revalidatePath } from "next/cache";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { runBackgroundWorker } from "@/lib/publishing/background-worker";
@@ -41,6 +43,7 @@ export interface AutomationDashboardData {
  * Fetches real persisted data for Automation Settings & Health dashboard.
  */
 export async function getAutomationStatusAction(): Promise<AutomationDashboardData> {
+  await assertAdminSession();
   const adminClient = createAdminSupabaseClient();
 
   // 1. App settings
@@ -153,6 +156,7 @@ export async function updateAutomationSettingsAction(data: {
   moderationMode: "manual" | "ai_assisted" | "smart_auto";
   catchupWindowMinutes: number;
 }) {
+  await assertAdminSession();
   const adminClient = createAdminSupabaseClient();
   const { error } = await adminClient
     .from("app_settings")
@@ -173,6 +177,7 @@ export async function updateAutomationSettingsAction(data: {
  * Manual Admin Control: Run read-only worker diagnostics.
  */
 export async function runWorkerDiagnosticsAction() {
+  await assertAdminSession();
   const summary = await runBackgroundWorker({
     triggerSource: "diagnostic",
     dryRun: true,
@@ -185,6 +190,7 @@ export async function runWorkerDiagnosticsAction() {
  * Manual Admin Control: Trigger token health & refresh check.
  */
 export async function triggerTokenRefreshCheckAction() {
+  await assertAdminSession();
   const report = await performTokenHealthAndRefresh();
   revalidatePath("/admin/settings");
   return report;
@@ -194,6 +200,7 @@ export async function triggerTokenRefreshCheckAction() {
  * Manual Admin Control: Trigger storage maintenance & cleanup preview.
  */
 export async function triggerStorageMaintenanceAction() {
+  await assertAdminSession();
   const report = await performStorageMaintenance();
   revalidatePath("/admin/settings");
   return report;
@@ -203,6 +210,7 @@ export async function triggerStorageMaintenanceAction() {
  * Manual Admin Control: Process pending moderation queue.
  */
 export async function triggerModerationBatchAction(maxCount: number = 5) {
+  await assertAdminSession();
   const result = await runAutomatedModerationBatch(maxCount);
   revalidatePath("/admin/settings");
   revalidatePath("/admin/inbox");
