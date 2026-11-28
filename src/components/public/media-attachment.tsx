@@ -50,8 +50,13 @@ export function MediaAttachment({
     const isImage = selected.type.startsWith("image/");
     const isVideo = selected.type.startsWith("video/");
 
-    if (!isImage && !isVideo) {
-      setError("Please select a valid image (JPEG, PNG, WebP) or video (MP4, MOV).");
+    if (isVideo) {
+      setError("Video upload is temporarily disabled until server-side video transcoding pipeline is finalized. Please attach a photo (JPEG, PNG, WebP).");
+      return;
+    }
+
+    if (!isImage) {
+      setError("Please select a valid image (JPEG, PNG, WebP).");
       return;
     }
 

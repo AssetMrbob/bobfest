@@ -34,17 +34,24 @@ export async function getFontBuffer(fontFilePath: string | null | undefined): Pr
         .from("bobfess-templates")
         .download(fontFilePath);
 
-      if (!error && data) {
-        const arrayBuf = await data.arrayBuffer();
-        const buf = Buffer.from(arrayBuf);
-        fontBufferCache.set(fontFilePath, buf);
-        return {
-          buffer: buf,
-          fontFamily: path.basename(fontFilePath, path.extname(fontFilePath)),
-        };
+      if (error || !data) {
+        throw new Error(
+          `Custom font file '${fontFilePath}' could not be downloaded from storage: ${error?.message || "File not found"}. Rendering held for admin review.`
+        );
       }
-    } catch {
-      // If remote download fails, fall through to default
+
+      const arrayBuf = await data.arrayBuffer();
+      const buf = Buffer.from(arrayBuf);
+      fontBufferCache.set(fontFilePath, buf);
+      return {
+        buffer: buf,
+        fontFamily: path.basename(fontFilePath, path.extname(fontFilePath)),
+      };
+    } catch (err) {
+      // NEVER silently fallback to default font when a custom font was explicitly requested!
+      throw new Error(
+        `Failed to load custom font '${fontFilePath}': ${(err as Error).message}. Publication held for review.`
+      );
     }
   }
 

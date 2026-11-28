@@ -10,6 +10,7 @@ import {
   renderFeedSlideJpeg,
   renderCompanionStoryJpeg,
 } from "@/lib/rendering/template-renderer";
+import { generateAndPersistPublicationAssets } from "@/lib/rendering/publication-asset-generator";
 
 /**
  * Uploads a custom template asset:
@@ -232,7 +233,8 @@ export async function renderUnifiedPreview(
  */
 export async function generatePublicationAssets(
   submissionId: string,
-  templateId?: string
+  templateId?: string,
+  batchId?: string
 ): Promise<{
   success: boolean;
   feedAssetUrls?: string[];
@@ -247,133 +249,39 @@ export async function generatePublicationAssets(
   } = await supabaseUser.auth.getUser();
   if (!user) return { success: false, error: "Unauthorized" };
 
-  const adminClient = createAdminSupabaseClient();
-
-  // 1. Fetch submission with slides and media
-  const { data: sub } = await adminClient
-    .from("submissions")
-    .select("*, submission_slides(*), media_assets(*)")
-    .eq("id", submissionId)
-    .single();
-
-  if (!sub) return { success: false, error: "Submission not found." };
-
-  // 2. Fetch active template
-  let templateQuery = adminClient.from("templates").select("*");
-  if (templateId) {
-    templateQuery = templateQuery.eq("id", templateId);
-  } else {
-    templateQuery = templateQuery.eq("category", "text_feed").eq("is_active", true);
-  }
-  const { data: activeTemplate } = await templateQuery.maybeSingle();
-
-  // Default fallback template
-  const template: CustomTemplate = (activeTemplate as unknown as CustomTemplate) || {
-    id: "default-text-feed",
-    name: "Classic Swiss Text Feed",
-    category: "text_feed",
-    dimensions: { width: 1080, height: 1350 },
-    background_storage_path: null,
-    font_family: "Geist",
-    font_file_path: null,
-    font_size_min: 24,
-    font_size_max: 44,
-    text_color: "#171717",
-    line_height: 1.35,
-    letter_spacing: 0,
-    vertical_align: "top",
-    layout_config: {
-      message_box: { x: 100, y: 280, width: 880, height: 750 },
-      recipient_box: { x: 100, y: 200, width: 880, height: 50 },
-      code_box: { x: 100, y: 1200, width: 880, height: 40 },
-    },
-    is_active: true,
-    version: 1,
-  };
-
-  const slides =
-    sub.submission_slides && sub.submission_slides.length > 0
-      ? sub.submission_slides.sort((a, b) => a.slide_order - b.slide_order)
-      : [{ slide_order: 1, message: sub.message }];
-
-  const feedAssetPaths: string[] = [];
-  const feedBuffers: Buffer[] = [];
-
-  // Download media if photo attached
-  let photoBuffer: Buffer | undefined;
-  if (sub.media_assets && sub.media_assets.length > 0) {
-    const firstMedia = sub.media_assets[0];
-    if (firstMedia?.storage_path) {
-      const { data: mediaData } = await adminClient.storage
-        .from("bobfess-media")
-        .download(firstMedia.storage_path);
-      if (mediaData) {
-        photoBuffer = Buffer.from(await mediaData.arrayBuffer());
-      }
-    }
-  }
-
-  // Render each slide
-  for (const s of slides) {
-    const renderRes = await renderFeedSlideJpeg({
-      message: s.message,
-      recipient: template.layout_config.show_recipient !== false ? sub.recipient : undefined,
-      publicCode: template.layout_config.show_code !== false ? sub.public_code : undefined,
-      slideOrder:
-        template.layout_config.show_slide_number !== false && slides.length > 1
-          ? (s.slide_order as 1 | 2)
-          : undefined,
-      template,
-      photoBuffer: s.slide_order === 1 ? photoBuffer : undefined,
-    });
-
-    // Check strict validation rule: text must fit inside bounding box
-    if (!renderRes.fits) {
-      return {
-        success: false,
-        validationError: `Slide ${s.slide_order} overflow error: ${renderRes.overflowReason}. Publication held for admin review.`,
-      };
-    }
-
-    const path = `posts/${sub.public_code}_slide_${s.slide_order}.jpg`;
-    await adminClient.storage.from("bobfess-published").upload(path, renderRes.buffer, {
-      contentType: "image/jpeg",
-      upsert: true,
-    });
-
-    feedAssetPaths.push(path);
-    feedBuffers.push(renderRes.buffer);
-  }
-
-  // Fetch story template if available
-  const { data: storyTemplateData } = await adminClient
-    .from("templates")
-    .select("*")
-    .eq("category", "story")
-    .eq("is_active", true)
-    .maybeSingle();
-
-  const storyTemplate = (storyTemplateData as unknown as CustomTemplate) || undefined;
-
-  // Render Story from Slide 1
-  const storyBuffer = await renderCompanionStoryJpeg(feedBuffers[0], storyTemplate);
-  const storyPath = `stories/${sub.public_code}_story.jpg`;
-  await adminClient.storage.from("bobfess-published").upload(storyPath, storyBuffer, {
-    contentType: "image/jpeg",
-    upsert: true,
+  const res = await generateAndPersistPublicationAssets({
+    submissionId,
+    templateId,
+    batchId,
   });
 
-  // Generate signed preview URLs
-  const { data: s1Url } = await adminClient.storage
-    .from("bobfess-published")
-    .createSignedUrl(feedAssetPaths[0], 3600);
-  const { data: storySignedUrl } = await adminClient.storage
-    .from("bobfess-published")
-    .createSignedUrl(storyPath, 3600);
+  if (!res.success) {
+    return {
+      success: false,
+      validationError: res.validationError,
+      error: res.error,
+    };
+  }
+
+  // Generate signed preview URLs for admin UI
+  const adminClient = createAdminSupabaseClient();
+  const feedUrls: string[] = [];
+  if (res.feedAssetPaths) {
+    for (const p of res.feedAssetPaths) {
+      const { data } = await adminClient.storage.from("bobfess-published").createSignedUrl(p, 3600);
+      if (data?.signedUrl) feedUrls.push(data.signedUrl);
+    }
+  }
+
+  let storySignedUrl: string | undefined;
+  if (res.storyAssetPath) {
+    const { data } = await adminClient.storage.from("bobfess-published").createSignedUrl(res.storyAssetPath, 3600);
+    storySignedUrl = data?.signedUrl;
+  }
 
   return {
     success: true,
-    feedAssetUrls: s1Url?.signedUrl ? [s1Url.signedUrl] : [],
-    storyAssetUrl: storySignedUrl?.signedUrl,
+    feedAssetUrls: feedUrls,
+    storyAssetUrl: storySignedUrl,
   };
 }

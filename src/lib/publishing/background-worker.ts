@@ -3,6 +3,7 @@ import { DistributedLockManager } from "./distributed-lock";
 import { evaluatePublicationSlot, reservePublicationSlot } from "./slot-manager";
 import { selectNextEligibleSubmission } from "./queue-selector";
 import { executeMultiPlatformPublishing } from "./multi-platform-orchestrator";
+import { generateAndPersistPublicationAssets } from "@/lib/rendering/publication-asset-generator";
 import { performTokenHealthAndRefresh } from "./token-maintenance";
 import { performStorageMaintenance } from "./storage-maintenance";
 import { recoverStaleJobs } from "./stale-job-recovery";
@@ -239,8 +240,28 @@ export async function runBackgroundWorker(
       return summary;
     }
 
-    // Step H: Automatic Asset Generation check
-    // Multi-platform orchestrator automatically handles asset presence and signed URLs
+    // Step H: Explicit Server-Side Publication Asset Generation
+    // Generates, validates zero-overflow, and persists feed_asset_paths & story_asset_path
+    const assetGenResult = await generateAndPersistPublicationAssets({
+      submissionId: targetSub.id,
+      batchId: newBatch.id,
+    });
+
+    if (!assetGenResult.success) {
+      await adminClient
+        .from("publication_batches")
+        .update({
+          status: "failed",
+        })
+        .eq("id", newBatch.id);
+
+      summary.status = "error";
+      summary.message = `Asset generation held: ${assetGenResult.validationError || assetGenResult.error}`;
+      summary.durationMs = Date.now() - startTime;
+      await updateSchedulerHeartbeat(adminClient, summary);
+      return summary;
+    }
+
     // Step I: Multi-Platform Publishing (Instagram Feed + Story, Threads Root + Reply)
     const pubResult = await executeMultiPlatformPublishing({
       batchId: newBatch.id,

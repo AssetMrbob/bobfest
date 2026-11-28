@@ -11,6 +11,8 @@ import { SubmissionStatus } from "@/lib/supabase/types";
 import { getStorageLedgerMetrics, reconcileBucketStorage, runFifoStorageCleanup } from "@/lib/storage/storage-manager";
 import { isGeminiConfigured, getGeminiModelName } from "@/lib/gemini/moderation-service";
 import { getAiQuotaUsage, processSubmissionModeration, runPendingModerationWorker } from "@/lib/gemini/moderation-worker";
+import { evaluatePublicationSlot, reservePublicationSlot } from "@/lib/publishing/slot-manager";
+import { generateAndPersistPublicationAssets } from "@/lib/rendering/publication-asset-generator";
 
 /**
  * Checks if real Supabase credentials are configured in the environment.
@@ -837,6 +839,35 @@ export async function createPublicationBatch(scheduledTime: string, submissionId
     .single();
 
   if (batchErr || !batch) return { error: "Failed to create batch." };
+
+  // 3. Atomically reserve slot using evaluatePublicationSlot & reservePublicationSlot
+  const scheduledDate = new Date(scheduledTime);
+  const evalSlot = evaluatePublicationSlot(scheduledDate);
+  const slotTime: "12:00" | "19:00" =
+    scheduledDate.getUTCHours() + 7 >= 16 ? "19:00" : "12:00";
+
+  const slotRes = await reservePublicationSlot({
+    wibDate: evalSlot.currentWibDate,
+    slotTime,
+    batchId: batch.id,
+    submissionId,
+  });
+
+  if (!slotRes.success) {
+    await adminClient.from("publication_batches").delete().eq("id", batch.id);
+    return { error: `Atomic slot reservation denied: ${slotRes.error}` };
+  }
+
+  // 4. Generate and persist publication assets immediately for the batch
+  const assetRes = await generateAndPersistPublicationAssets({
+    submissionId,
+    batchId: batch.id,
+  });
+
+  if (!assetRes.success) {
+    // If text overflow or error, we still link item but leave batch for review
+    console.warn("Asset generation note during manual batch creation:", assetRes.validationError || assetRes.error);
+  }
 
   // Link single parent submission as slide 1 (and slide 2 if multi-slide)
   await adminClient.from("publication_items").insert({

@@ -19,9 +19,10 @@ const ALLOWED_MIME_TYPES: Record<string, { mediaType: "image" | "video"; ext: st
   "image/jpeg": { mediaType: "image", ext: "jpg" },
   "image/png": { mediaType: "image", ext: "png" },
   "image/webp": { mediaType: "image", ext: "webp" },
-  "video/mp4": { mediaType: "video", ext: "mp4" },
-  "video/quicktime": { mediaType: "video", ext: "mov" },
-  "video/webm": { mediaType: "video", ext: "webm" },
+  // Video uploads temporarily disabled until server-side video transcoding & container validation is finalized
+  // "video/mp4": { mediaType: "video", ext: "mp4" },
+  // "video/quicktime": { mediaType: "video", ext: "mov" },
+  // "video/webm": { mediaType: "video", ext: "webm" },
 };
 
 export async function POST(request: NextRequest) {
@@ -36,8 +37,17 @@ export async function POST(request: NextRequest) {
     const { mimeType, turnstileToken } = body;
 
     if (!mimeType || typeof mimeType !== "string" || !ALLOWED_MIME_TYPES[mimeType]) {
+      if (mimeType && mimeType.startsWith("video/")) {
+        return NextResponse.json(
+          {
+            error:
+              "Video attachments are temporarily disabled while server-side video transcoding pipeline is being finalized. Please upload an image (JPEG, PNG, WebP).",
+          },
+          { status: 400 }
+        );
+      }
       return NextResponse.json(
-        { error: "Unsupported media format. Allowed: JPEG, PNG, WebP, MP4, MOV, WebM." },
+        { error: "Unsupported media format. Allowed: JPEG, PNG, WebP." },
         { status: 400 }
       );
     }
