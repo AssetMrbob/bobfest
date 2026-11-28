@@ -529,3 +529,65 @@ Built a robust, serverless-friendly automated background publishing and scheduli
    - **Instagram Untouched**: Instagram templates, carousels, stories, and captions remain completely unmodified.
    - **No Live Posts Created**: Verified through deterministic dry runs and automated unit validation without creating live posts.
 
+
+
+---
+
+## Phase 09A: Final Security & Performance Audit (Complete & Verified)
+
+### 1. Verification of Remaining Phase 08 Tasks
+- **Migration & Live Database Reconciliation**:
+  - Validated live database schema: `distributed_locks`, `queue_jobs`, `publication_slots`, and `scheduler_health`.
+  - Reconciled `20261128000007_phase08_automated_publishing.sql`: enforced `SET search_path = ''`, added `#variable_conflict use_column`, implemented `ON CONFLICT DO UPDATE` with `clock_timestamp()` for distributed locking, and strictly revoked unauthenticated RPC access.
+  - Live atomic queue claiming, concurrent locking, lease expiration, and fencing token validation verified using isolated synthetic fixtures with instant cleanup.
+  - Verified operational isolation: `TEST*` synthetic records are strictly excluded from queue selection, metrics, and automated publishing.
+  - Verified worker dispatch lifecycle: clearly distinguishes publication windows (12:00 & 19:00 WIB), nightly storage maintenance (03:00 WIB), and daily token refresh (04:00 WIB).
+  - Committed and pushed verified Phase 08 fixes (`b21c9b0`).
+
+### 2. Authentication & Authorization Audit
+- **Admin Server Actions**: Every administrative server action (`actions.ts`, `automation-actions.ts`, `social-actions.ts`, `template-actions.ts`) strictly enforces `assertAdminSession()`.
+- **Session Security**: Server-side role verification (`admin_profiles.role === 'admin'`) guarantees that non-admin authenticated users cannot execute administrative actions or read private data.
+- **Middleware Route Protection**: Next.js middleware guards `/admin/*` routes, redirecting unauthenticated visitors to `/admin/login`.
+
+### 3. Supabase Security Audit
+- **Row Level Security (RLS)**: Audited all 22 database tables using an unauthenticated anonymous client. All direct `SELECT`, `INSERT`, `UPDATE`, and `DELETE` requests are rejected with PostgreSQL error `42501 (INSUFFICIENT PRIVILEGE)`.
+- **Storage Protection**: Buckets `bobfess-images` and `bobfess-videos` are private. Anonymous listing returns 0 objects; direct anonymous downloads and uploads are rejected.
+- **Signed URLs**: Time-limited signed preview URLs (15-min TTL) are generated exclusively server-side for authenticated administrators.
+
+### 4. Credential & Secret Audit
+- **Repository Cleanliness**: Git tracking history contains zero committed secrets or real credentials.
+- **Environment Isolation**: `.env*.local` and `.env` are ignored in `.gitignore`. `.env.example` contains only safe dummy placeholders.
+- **Client Bundle Protection**: Automated AST/string scan of all `.next/static` production JavaScript chunks confirmed 0 leaked server secrets (`APP_SECRET`, `SUPABASE_SECRET_KEY`, `INSTAGRAM_ACCESS_TOKEN`, `THREADS_ACCESS_TOKEN`, `GEMINI_API_KEY`, `CRON_SECRET`, `TURNSTILE_SECRET_KEY`).
+- **Encrypted Persistence**: Tokens stored in `app_credentials` are encrypted using AES-256-GCM derived from `APP_SECRET` ($\ge 32$ chars).
+
+### 5. Public Submission Security
+- **Multi-Slide & Character Limits**: Server enforces maximum 2 slides and 500 characters per slide.
+- **Rate Limiting & Anti-Bot**: 5 submissions per 10 minutes per client HMAC hash; Cloudflare Turnstile token verified with server-side single-use replay cache.
+- **Doxxing & PII Defense**: Regex filters reject phone numbers, emails, and sensitive contact patterns before database persistence or AI processing.
+- **Idempotency**: SHA-256 idempotency key prevents duplicate inserts on network retries.
+
+### 6. File Upload & Storage Audit
+- **Client & Server Controls**: Images constrained to 5MB and downscaled to $\le 1600\text{px}$ with EXIF/metadata stripped. Videos constrained to 20MB and $\le 30\text{s}$ duration.
+- **Capacity Accounting**: Total storage budget 1,000,000,000 bytes with 90% warning, 95% hard ceiling, and 85% FIFO cleanup target. Protected assets and unresolved media are strictly preserved.
+
+### 7. Gemini AI Moderation & Privacy
+- **Default Mode**: AI-assisted mode is the default; Smart Auto requires explicit admin toggle.
+- **Human Gatekeeping**: Any attached media strictly forces human review.
+- **Prompt Injection Defense**: Confession text is isolated in `<user_confession>` XML tags with strict system instructions treating user content as untrusted data.
+- **Fail-Closed**: API failures, quota exhaustion (50 requests/day), or ambiguous classifications always default to `needs_review`.
+
+### 8. Multi-Platform Publishing Reliability
+- **Architecture**: 1 Menfess = 1 Instagram Feed post. Max 2 posts daily (12:00 & 19:00 WIB).
+- **Dependency Flow**: Instagram Feed must succeed before Story; Threads root post must succeed before reply post.
+- **Natural Threads Content**: Formatter publishes original approved message without branding prefixes, slide numbers, or continuation labels by default. Zero silent truncation.
+- **Acceptance Suite**: 44/44 unit and acceptance tests passed.
+
+### 9. Scheduler & Worker Security
+- **Authorization**: Endpoint `/api/cron/worker` requires Bearer `CRON_SECRET` verified via constant-time comparison (`crypto.timingSafeEqual`). Query string secrets are rejected.
+- **Safety Gate**: Master automation switch defaults to OFF (`master_automation_enabled: false`). Automated publishing and production scheduler remain inactive.
+
+### 10. Quality Gates Summary
+- **TypeScript**: `npx tsc --noEmit` passed with 0 errors.
+- **ESLint**: `npm run lint` passed with 0 errors (2 standard warnings for `<img>` preview).
+- **Production Build**: `npm run build` compiled cleanly with Turbopack and PPR.
+- **Vulnerability Audit**: `npm audit` reported 0 vulnerabilities.
